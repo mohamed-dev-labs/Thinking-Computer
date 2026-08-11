@@ -73,3 +73,7 @@
 - [x] Expand the mono-pixel TUI into an interactive terminal workflow with navigation and bounded agent/task actions.
 - [x] Persist provenance and audit metadata for web search and web fetch actions while retaining prompt-injection-safe handling.
 - [x] Add a dedicated English providers guide and link it from the documentation index and README.
+- [x] Build and smoke-test a clean checkout of the public Thinking Computer repository.
+- [x] Verify a temporary, environment-only OpenAI-compatible Manus provider configuration without exposing credentials or committing local configuration.
+- [x] Run a bounded practical chat request and document the outcome; offer Telegram delivery testing only if a bot token and trusted recipient are supplied.
+- [x] Prioritize the clean-checkout build and one temporary, bounded provider smoke test before any optional channel work.
