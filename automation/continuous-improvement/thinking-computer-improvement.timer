@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule a bounded Thinking Computer improvement cycle
+
+[Timer]
+OnCalendar=Sun *-*-* 02:00:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=thinking-computer-improvement.service
+
+[Install]
+WantedBy=timers.target

@@ -14,6 +14,7 @@ pub enum Capability {
     InstallPackage,
     GenerateMedia,
     Plugin(String),
+    ActivateSkill,
     BridgeDispatch,
 }
 

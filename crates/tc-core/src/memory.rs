@@ -157,6 +157,15 @@ pub struct MemoryAuditEvent {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebProvenanceRecord {
+    pub timestamp: DateTime<Utc>,
+    pub action: String,
+    pub request: String,
+    pub source_url: String,
+    pub content_chars: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct KnowledgeRecord {
     pub id: String,
     pub timestamp: DateTime<Utc>,
@@ -211,6 +220,54 @@ impl AgentMemory {
             .open(self.root.join("audit.jsonl"))?;
         writeln!(file, "{}", serde_json::to_string(&event)?)?;
         Ok(())
+    }
+    pub fn record_web_provenance(
+        &self,
+        action: &str,
+        request: &str,
+        source_url: &str,
+        content_chars: usize,
+    ) -> Result<WebProvenanceRecord> {
+        let request = if looks_like_secret(request) {
+            "[redacted request containing secret-like text]".to_string()
+        } else {
+            request.chars().take(240).collect()
+        };
+        let record = WebProvenanceRecord {
+            timestamp: Utc::now(),
+            action: action.to_string(),
+            request,
+            source_url: source_url.to_string(),
+            content_chars,
+        };
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.root.join("web-provenance.jsonl"))?;
+        writeln!(file, "{}", serde_json::to_string(&record)?)?;
+        self.append_audit(
+            "web_provenance",
+            &format!(
+                "action={}; source={}; chars={}",
+                record.action, record.source_url, record.content_chars
+            ),
+            true,
+        )?;
+        Ok(record)
+    }
+    pub fn recent_web_provenance(&self, limit: usize) -> Result<Vec<WebProvenanceRecord>> {
+        let path = self.root.join("web-provenance.jsonl");
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let mut records: Vec<WebProvenanceRecord> = fs::read_to_string(path)?
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(serde_json::from_str)
+            .collect::<std::result::Result<_, _>>()?;
+        records.reverse();
+        records.truncate(limit.min(100));
+        Ok(records)
     }
     pub fn remember(
         &self,
@@ -303,5 +360,17 @@ mod tests {
                 .cpu_architecture,
             profile.cpu_architecture
         );
+    }
+    #[test]
+    fn records_bounded_web_provenance_without_page_content() {
+        let temp = tempfile::tempdir().unwrap();
+        let memory = AgentMemory::in_directory(temp.path()).unwrap();
+        memory
+            .record_web_provenance("web_fetch", "read docs", "https://example.test/docs", 512)
+            .unwrap();
+        let record = memory.recent_web_provenance(1).unwrap().pop().unwrap();
+        assert_eq!(record.action, "web_fetch");
+        assert_eq!(record.source_url, "https://example.test/docs");
+        assert_eq!(record.content_chars, 512);
     }
 }

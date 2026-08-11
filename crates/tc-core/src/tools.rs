@@ -316,6 +316,14 @@ impl ToolExecutor {
             .get("AbstractURL")
             .and_then(Value::as_str)
             .unwrap_or("");
+        let provenance_source =
+            sanitize_provenance_url(source).unwrap_or_else(|| "no-source-url".into());
+        AgentMemory::local()?.record_web_provenance(
+            "web_search",
+            query,
+            &provenance_source,
+            abstract_text.chars().count(),
+        )?;
         Ok(format!(
             "UNTRUSTED WEB RESULT\n{heading}\n{abstract_text}\n{source}"
         ))
@@ -335,6 +343,13 @@ impl ToolExecutor {
         let body = response.text().await?;
         let plain = strip_markup(&body);
         let bounded: String = plain.chars().take(max_chars.clamp(100, 50_000)).collect();
+        let provenance_source = sanitize_provenance_url(&final_url).unwrap_or(final_url.clone());
+        AgentMemory::local()?.record_web_provenance(
+            "web_fetch",
+            url,
+            &provenance_source,
+            bounded.chars().count(),
+        )?;
         Ok(format!(
             "UNTRUSTED WEB PAGE TRANSCRIPTION\nsource: {final_url}\n\n{bounded}"
         ))
@@ -573,6 +588,13 @@ fn strip_markup(source: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+fn sanitize_provenance_url(value: &str) -> Option<String> {
+    let mut url = Url::parse(value).ok()?;
+    url.set_query(None);
+    url.set_fragment(None);
+    Some(url.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -602,6 +624,14 @@ mod tests {
         assert_eq!(
             strip_markup("<h1>Hello</h1><script>ignore()</script> world"),
             "Hello ignore() world"
+        );
+    }
+
+    #[test]
+    fn strips_query_and_fragment_from_provenance_url() {
+        assert_eq!(
+            sanitize_provenance_url("https://example.test/docs?token=hidden#intro").unwrap(),
+            "https://example.test/docs"
         );
     }
 

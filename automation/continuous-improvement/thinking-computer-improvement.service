@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=%h/Thinking-Computer
 Environment=TC_HOME=%h/.thinking-computer
-ExecStart=/usr/bin/python3 %h/Thinking-Computer/automation/continuous-improvement/run_improvement.py --repo %h/Thinking-Computer --execute-agent --commit
+ExecStart=/usr/bin/python3 %h/Thinking-Computer/automation/continuous-improvement/run_improvement.py --repo %h/Thinking-Computer --execute-agent --commit --new-cycle
 Restart=no
 Nice=10
 NoNewPrivileges=true

@@ -43,11 +43,11 @@
 - [x] Add an approved logo record with the generated asset checksum and visual acceptance criteria for the mono-pixel wordmark.
 - [x] Define VM-first autonomous-agent boundaries, quality gates, and a safe 20-run hourly improvement plan without artificial commits.
 - [x] Implement a local Skills registry with explicit manifests, versioning, user review, and safe activation controls.
-- [ ] Implement a Sub-Agent and Expert-task model with bounded delegation, typed outputs, and Rust-side permission inheritance.
+- [x] Implement a Sub-Agent and Expert-task model with bounded delegation, typed outputs, and Rust-side permission inheritance.
 - [x] Build an OpenTUI-style terminal user interface using the mono-pixel Thinking Computer identity.
 - [x] Add explicit browse/search workflows with provenance records and prompt-injection-safe handling of fetched content.
 - [x] Add adapter-driven outbound Telegram and Discord message delivery with local credentials and trusted-recipient policy checks.
-- [ ] Add user-controlled scheduled improvement runs with test/security gates, audit logs, failure stop conditions, and meaningful Git commits only.
+- [x] Add user-controlled scheduled improvement runs with test/security gates, audit logs, failure stop conditions, and meaningful Git commits only.
 - [x] Define a 20-hour continuous improvement runbook with phase budgets, explicit scope limits, and a maximum meaningful-commit policy.
 - [x] Implement a resumable local improvement worker with durable state, per-phase audit logs, and automatic halt on failed tests or security checks.
 - [x] Provide VM installation and supervision templates for running one controlled 20-hour improvement session without relying on this chat to remain active.
@@ -63,11 +63,13 @@
 - [x] Define a separate Vercel-inspired, dark marketing-site information architecture with no traditional footer.
 - [x] Build and validate the separate marketing site without changing the CLI product surface.
 - [x] Verify the connected Cloudflare Workers account, deploy the approved marketing site, and make https://tc.clatterlabs.workers.dev the public route.
-- [ ] Sync all tested source, documentation, website, and deployment configuration changes to the public GitHub repository in meaningful commits.
-- [ ] Run documented, bounded post-release improvement cycles that research relevant agent capabilities, implement only verified changes, and halt automatically on security or quality-gate failure.
-- [ ] Keep every future enhancement measurable by user value, security posture, test coverage, or documented compatibility; reject artificial line-count targets and non-meaningful commits.
+- [x] Sync all tested source, documentation, website, and deployment configuration changes to the public GitHub repository in meaningful commits.
+- [x] Run documented, bounded post-release improvement cycles that research relevant agent capabilities, implement only verified changes, and halt automatically on security or quality-gate failure.
+- [x] Keep every future enhancement measurable by user value, security posture, test coverage, or documented compatibility; reject artificial line-count targets and non-meaningful commits.
+- [x] Execute and document a complete new-cycle post-release rehearsal with its timestamped state artifact, research input, gate evidence, and halt behavior.
+- [x] Require measurable value evidence and non-empty change validation in improvement-worker reports before a task can be committed.
 - [x] Refine the marketing site with original technical motion, contrast, and density informed by x.ai/bot, without copying xAI/Grok names, logos, or protected brand identity.
-- [ ] Add a Rust-side Skill activation workflow with explicit enable state, review controls, local audit records, and tests.
-- [ ] Expand the mono-pixel TUI into an interactive terminal workflow with navigation and bounded agent/task actions.
-- [ ] Persist provenance and audit metadata for web search and web fetch actions while retaining prompt-injection-safe handling.
+- [x] Add a Rust-side Skill activation workflow with explicit enable state, review controls, local audit records, and tests.
+- [x] Expand the mono-pixel TUI into an interactive terminal workflow with navigation and bounded agent/task actions.
+- [x] Persist provenance and audit metadata for web search and web fetch actions while retaining prompt-injection-safe handling.
 - [x] Add a dedicated English providers guide and link it from the documentation index and README.

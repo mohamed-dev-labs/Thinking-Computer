@@ -11,6 +11,8 @@ Thinking Computer is an open-source, **VM-first terminal agent**. Its public int
 | [Plugins](plugins.md) | Rust-validated Node.js plugin templates and invocation contract. |
 | [Channels](channel-outbound-research.md) | Trusted inbound senders and policy-gated outbound delivery. |
 | [Continuous improvement](continuous-improvement.md) | The resumable 20-slot improvement worker and its security gates. |
+| [Scheduled improvement cycles](continuous-improvement-scheduling.md) | Optional VM timer template and separate, auditable cycle state. |
+| [Improvement log](improvement-log.md) | Bounded improvement decisions, security references, validation evidence, and residual risk. |
 | [Hermes and OpenClaw comparison](comparison-hermes-openclaw.md) | Similarities, differences, provenance, and clean-room boundary. |
 | [Connected service boundaries](connected-service-boundaries.md) | GitHub and Cloudflare responsibilities and guardrails. |
 

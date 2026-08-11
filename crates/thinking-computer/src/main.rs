@@ -114,6 +114,14 @@ enum PluginCommand {
 #[derive(Debug, Subcommand)]
 enum SkillCommand {
     List,
+    Enable {
+        #[arg(long)]
+        name: String,
+    },
+    Disable {
+        #[arg(long)]
+        name: String,
+    },
     Create {
         #[arg(long)]
         name: String,
@@ -295,9 +303,17 @@ async fn main() -> Result<()> {
                 );
             }
         }
-        Command::Tui => tui::run()?,
+        Command::Tui => {
+            if let Some(task) = tui::run()? {
+                let answer = agent_for(&config, &cli, None, None, None)
+                    .await?
+                    .run(&task)
+                    .await?;
+                println!("\n{answer}");
+            }
+        }
         Command::Plugins { command } => plugins(command)?,
-        Command::Skills { command } => skills(command)?,
+        Command::Skills { command } => skills(command, cli.yes)?,
         Command::Schedule { command } => schedule(command)?,
         Command::Memory { command } => memory(command, cli.yes)?,
         Command::Bridge { command } => bridge(command, &config, &cli).await?,
@@ -380,7 +396,7 @@ async fn webhook(command: &WebhookCommand, config: &AppConfig) -> Result<()> {
     Ok(())
 }
 
-fn skills(command: &SkillCommand) -> Result<()> {
+fn skills(command: &SkillCommand, assume_yes: bool) -> Result<()> {
     let store = SkillStore::local();
     match command {
         SkillCommand::List => {
@@ -399,9 +415,32 @@ fn skills(command: &SkillCommand) -> Result<()> {
                 description: description.clone(),
                 instructions: instructions.clone(),
                 capabilities: capabilities.clone(),
+                enabled: false,
                 created_at: chrono::Utc::now(),
             })?;
             println!("{}", serde_json::to_string_pretty(&skill)?);
+        }
+        SkillCommand::Enable { name } | SkillCommand::Disable { name } => {
+            let enabled = matches!(command, SkillCommand::Enable { .. });
+            let action = if enabled { "enable" } else { "disable" };
+            if !assume_yes
+                && !TerminalApproval.approve(&ApprovalRequest {
+                    capability: Capability::ActivateSkill,
+                    summary: format!(
+                    "{action} local Skill {name}; this changes only its reviewed activation state"
+                ),
+                })?
+            {
+                anyhow::bail!("Skill activation change was denied by the user");
+            }
+            let result = store.set_enabled(name, enabled);
+            let success = result.is_ok();
+            AgentMemory::local()?.append_audit(
+                "skill_activation",
+                &format!("name={name}; enabled={enabled}"),
+                success,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&result?)?);
         }
     }
     Ok(())

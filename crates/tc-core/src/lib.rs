@@ -3,6 +3,7 @@
 pub mod agent;
 pub mod bridge;
 pub mod config;
+pub mod delegation;
 pub mod memory;
 pub mod model;
 pub mod outbound;
@@ -23,6 +24,7 @@ pub use config::{
     AppConfig, ChannelConfig, ProviderConfig, ProviderKind, ResolvedProvider, ResolvedService,
     ServiceConfig,
 };
+pub use delegation::{DelegationPolicy, ExpertResult, ExpertStatus, ExpertTask};
 pub use memory::{AgentMemory, KnowledgeRecord, SessionStore, VmCapabilityProfile};
 pub use model::{ChatMessage, Role, ToolCall, ToolDefinition};
 pub use outbound::{

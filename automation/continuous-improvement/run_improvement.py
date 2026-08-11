@@ -28,6 +28,9 @@ def load_plan(path: Path) -> dict[str, Any]:
         raise ValueError("unsupported or malformed improvement plan")
     if len(plan["tasks"]) != 20:
         raise ValueError("the continuous plan must contain exactly 20 hourly tasks")
+    evidence = plan.get("default_value_evidence")
+    if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and item.strip() for item in evidence):
+        raise ValueError("the continuous plan must define non-empty default_value_evidence")
     return plan
 
 
@@ -45,6 +48,11 @@ def load_state(path: Path) -> dict[str, Any]:
 def save_state(path: Path, state: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def cycle_state_path(repo: Path, timestamp: str) -> Path:
+    safe_timestamp = timestamp.replace(":", "-").replace("+", "-")
+    return repo / ".thinking-computer" / "improvement-cycles" / f"{safe_timestamp}.json"
 
 
 def event(state: dict[str, Any], kind: str, **details: Any) -> None:
@@ -75,6 +83,13 @@ def quality_gates(plan: dict[str, Any], repo: Path, state: dict[str, Any]) -> li
         run_checked(command, repo, state, label)
         successful_commands.append({"label": label, "command": command})
     return successful_commands
+
+
+def value_evidence_for(plan: dict[str, Any], task: dict[str, Any]) -> list[str]:
+    evidence = task.get("value_evidence", plan["default_value_evidence"])
+    if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and item.strip() for item in evidence):
+        raise ValueError(f"task {task.get('id', 'unknown')} has no measurable value evidence")
+    return evidence
 
 
 def working_tree_changed(repo: Path) -> bool:
@@ -111,11 +126,17 @@ def invoke_agent(args: argparse.Namespace, task: dict[str, Any], repo: Path, sta
 
 
 def commit_if_requested(args: argparse.Namespace, task: dict[str, Any], repo: Path, state: dict[str, Any]) -> None:
-    if not args.commit or not working_tree_changed(repo):
+    if not args.commit:
+        return
+    if not working_tree_changed(repo):
+        event(state, "commit_skipped", task=task["id"], reason="no meaningful change set")
         return
     if len(state["completed"]) >= args.max_commits:
         raise RuntimeError("maximum meaningful commit count reached")
     run_checked(["git", "add", "-A"], repo, state, "git-add")
+    staged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo, check=False)
+    if staged.returncode == 0:
+        raise RuntimeError("refusing an empty commit: no meaningful staged change set")
     run_checked(["git", "commit", "-m", f"improve: {task['title']}"], repo, state, "git-commit")
 
 
@@ -133,6 +154,7 @@ def main() -> int:
     parser.add_argument("--max-commits", type=int, default=20)
     parser.add_argument("--max-changed-files", type=int, default=30)
     parser.add_argument("--no-wait", action="store_true", help="run slots consecutively for controlled testing")
+    parser.add_argument("--new-cycle", action="store_true", help="write this bounded run to a new timestamped state file")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
@@ -143,7 +165,13 @@ def main() -> int:
     if not 1 <= args.max_changed_files <= 100:
         raise SystemExit("--max-changed-files must be between 1 and 100")
     plan = load_plan(args.plan)
-    state_path = args.state or repo / ".thinking-computer" / "improvement-state.json"
+    if args.new_cycle and args.state:
+        raise SystemExit("--new-cycle cannot be combined with --state")
+    state_path = args.state or (
+        cycle_state_path(repo, utc_now())
+        if args.new_cycle
+        else repo / ".thinking-computer" / "improvement-state.json"
+    )
     state = load_state(state_path)
     if state.get("halted"):
         raise SystemExit("worker is halted; inspect the audit log and clear state only after review")
@@ -155,6 +183,7 @@ def main() -> int:
         slot_started = time.monotonic()
         event(state, "task_started", task=task["id"], title=task["title"])
         try:
+            evidence = value_evidence_for(plan, task)
             pre_task_gates = quality_gates(plan, repo, state)
             invoke_agent(args, task, repo, state)
             files = enforce_change_limit(repo, args.max_changed_files)
@@ -171,6 +200,7 @@ def main() -> int:
             "task": task["id"],
             "title": task["title"],
             "rationale": task["prompt"],
+            "value_evidence": evidence,
             "quality_gates": {
                 "before_task": pre_task_gates,
                 "after_task": post_task_gates,

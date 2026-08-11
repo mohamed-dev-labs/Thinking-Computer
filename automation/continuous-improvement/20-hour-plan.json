@@ -2,6 +2,11 @@
   "name": "thinking-computer-20-hour-improvement",
   "version": 1,
   "slot_minutes": 60,
+  "default_value_evidence": [
+    "security posture, test coverage, documentation accuracy, or documented compatibility",
+    "exact quality-gate commands recorded before and after the task",
+    "bounded changed-file list and residual-risk statement"
+  ],
   "quality_gates": [
     ["cargo", "fmt", "--all", "--", "--check"],
     ["cargo", "test", "--workspace"],
