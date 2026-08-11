@@ -12,29 +12,30 @@
 - [x] Add unit tests, security checks, an MIT license, contributor guidance, and a complete README.
 - [x] Create and publish the public GitHub repository named Thinking-Computer.
 - [x] Verify current provider API formats and classify each as native or OpenAI-compatible.
-- [ ] Add configuration, environment-variable resolution, and adapters for NVIDIA, OpenRouter, Groq, xAI, Mistral, Cloudflare Workers AI, Perplexity, Together AI, Fal.ai, and a generic OpenAI-compatible endpoint.
-- [ ] Add provider-resolution tests and safe configuration examples without embedded secrets.
+- [x] Add configuration, environment-variable resolution, and adapters for NVIDIA, OpenRouter, Groq, xAI, Mistral, Cloudflare Workers AI, Perplexity, Together AI, and a generic OpenAI-compatible endpoint.
+- [x] Add provider-resolution tests and safe configuration examples without embedded secrets.
 - [x] Update provider documentation and push the expanded support to the public repository.
-- [ ] Build an extensible provider and capability registry that distinguishes model APIs, OpenAI-compatible routing APIs, search/extraction services, and voice/media services.
-- [ ] Add representative support profiles for Moonshot, Z.AI GLM, MiniMax, DeepSeek, Baidu Qianfan, Alibaba DashScope, ElevenLabs, Firecrawl, and other configurable providers.
-- [ ] Add permission-gated local computer-use tools for workspace-aware files, shell, process inspection, and optional screen/clipboard adapters.
+- [x] Build an extensible provider and capability registry that distinguishes model APIs, OpenAI-compatible routing APIs, search/extraction services, and voice/media services.
+- [x] Add representative support profiles for Moonshot, Z.AI GLM, MiniMax, DeepSeek, Baidu Qianfan, Alibaba DashScope, ElevenLabs, Firecrawl, and other configurable providers.
+- [x] Add permission-gated local computer-use tools for workspace-aware files, shell, VM/process inspection, and optional extension points for screen/clipboard adapters.
 - [x] Add cross-platform local scheduled-task management with Cron expressions, local task definitions, and user-controlled OS registration commands.
-- [ ] Add a channel-bridge registry for Telegram, Discord, WhatsApp, Signal, and configurable bot/webhook-compatible messaging providers.
-- [ ] Add local pairing, trusted-sender allowlists, per-channel policies, and explicit command-execution consent for inbound messages.
+- [x] Add a channel-bridge registry for Telegram, Discord, WhatsApp, Signal, and configurable bot/webhook-compatible messaging providers.
+- [x] Add local pairing, trusted-sender allowlists, per-channel policies, and explicit command-execution consent for inbound messages.
 - [x] Document channel credentials, local/VPS operation, and the security limitations of each messaging integration.
-- [ ] Add a locally hosted webhook listener model with signature verification, replay protection, and explicit trusted-sender policy checks.
-- [ ] Add documented background-service installation templates for supported operating systems without silently creating persistent processes.
+- [x] Add a locally hosted webhook listener model with signature verification, replay protection, and explicit trusted-sender policy checks.
+- [x] Add documented background-service installation templates for supported operating systems without silently creating persistent processes.
 - [x] Keep licensing and documentation precise: Thinking Computer is clean-room and inspired by Hermes and OpenClaw rather than built from their source code.
 - [x] Integrate a documented Python/Hermes compatibility adapter while retaining Rust as the controlling engine for policies, resources, tasks, memory, and OS actions.
 - [x] Define a local JSON protocol between Python input surfaces and the Rust agent engine, with no hidden network service.
 - [x] Route scheduled/background work, coding tools, computer-use permissions, and hardware-facing system actions through Rust and the C++ bridge.
 - [x] Document language ownership for Rust, Python/Hermes, Node.js, and C++ plus stable JSON contracts for APIs, previews, and webhooks.
-- [ ] Create and include an original pixel-art Thinking Computer logo: black background, human and robotic hands, AI nodes, and autonomous-machine mood.
-- [ ] Regenerate the logo as a minimal monochrome mono-pixel terminal composition: black field, white human and robotic hands, one central spark, and sparse data-node details.
+- [x] Supersede the initial hand-and-node logo direction at the user's request with the final mono-pixel wordmark direction.
+- [x] Supersede the minimal hand-and-spark logo direction at the user's request with the final mono-pixel wordmark direction.
 - [x] Regenerate the logo as an original mono-pixel terminal wordmark: THINKING COMPUTER centered in white pixel type over a black, subtly neural background, with no hands, icons, or foreground nodes.
 - [x] Make the operating model VM-first with explicit capability grants, a local audit trail, and English warnings against unrestricted personal-device deployment.
 - [x] Extend Rust-backed persistent memory with user-owned knowledge records and resource/task audit metadata without persisting provider secrets.
-- [ ] Document approved package installation, web research, webpage transcription, and optional lightweight local learning as explicit VM-scoped capabilities.
+- [x] Document approved package installation, web research, webpage transcription, and optional lightweight local learning as explicit VM-scoped capabilities.
+- [x] Add unit tests for Fal.ai default and overridden model/base-URL request construction without network calls.
 - [x] Add a Rust VM capability profiler for OS, CPU, memory, disk, processes, installed tools, and resource snapshots.
 - [x] Persist capability analyses and approved package-installation audit events inside local agent memory while excluding secrets.
 - [x] Add generated registration helpers for macOS/Linux Cron and Windows Task Scheduler, with tests for each command template.

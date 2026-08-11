@@ -25,6 +25,17 @@ pub struct ChannelConfig {
     pub webhook_secret_env: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ServiceConfig {
+    /// A short family label such as `web_extract`, `speech`, `image`, or `custom_http`.
+    pub protocol: Option<String>,
+    pub api_key: Option<String>,
+    pub api_key_env: Option<String>,
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderKind {
@@ -48,6 +59,7 @@ pub enum ProviderKind {
     Zai,
     Minimax,
     Dashscope,
+    BaiduQianfan,
     OpenaiCompatible,
 }
 
@@ -74,6 +86,7 @@ impl ProviderKind {
             Self::Zai => "zai",
             Self::Minimax => "minimax",
             Self::Dashscope => "dashscope",
+            Self::BaiduQianfan => "baidu_qianfan",
             Self::OpenaiCompatible => "openai_compatible",
         }
     }
@@ -100,6 +113,7 @@ impl ProviderKind {
             Self::Zai => "glm-4.7",
             Self::Minimax => "MiniMax-M2.5",
             Self::Dashscope => "qwen-plus",
+            Self::BaiduQianfan => "ernie-4.5-8k-preview",
             Self::OpenaiCompatible => "configured-model-required",
         }
     }
@@ -126,6 +140,7 @@ impl ProviderKind {
             Self::Zai => Some("ZAI_API_KEY"),
             Self::Minimax => Some("MINIMAX_API_KEY"),
             Self::Dashscope => Some("DASHSCOPE_API_KEY"),
+            Self::BaiduQianfan => Some("QIANFAN_API_KEY"),
             Self::OpenaiCompatible => Some("OPENAI_COMPATIBLE_API_KEY"),
         }
     }
@@ -145,6 +160,12 @@ impl ProviderKind {
             Self::Groq => Some("https://api.groq.com/openai/v1/chat/completions"),
             Self::Xai => Some("https://api.x.ai/v1/chat/completions"),
             Self::Mistral => Some("https://api.mistral.ai/v1/chat/completions"),
+            Self::Perplexity => Some("https://api.perplexity.ai/chat/completions"),
+            Self::Together => Some("https://api.together.xyz/v1/chat/completions"),
+            Self::Fireworks => Some("https://api.fireworks.ai/inference/v1/chat/completions"),
+            Self::Cerebras => Some("https://api.cerebras.ai/v1/chat/completions"),
+            Self::Sambanova => Some("https://api.sambanova.ai/v1/chat/completions"),
+            Self::Deepseek => Some("https://api.deepseek.com/chat/completions"),
             Self::Ollama => Some("http://127.0.0.1:11434"),
             _ => None,
         }
@@ -164,7 +185,7 @@ impl std::str::FromStr for ProviderKind {
             "nvidia" | "nvidia_nim" | "nim" => Ok(Self::NvidiaNim), "cloudflare" | "cloudflare_workers_ai" | "workers_ai" => Ok(Self::CloudflareWorkersAi),
             "perplexity" => Ok(Self::Perplexity), "together" | "together_ai" => Ok(Self::Together), "fireworks" | "fireworks_ai" => Ok(Self::Fireworks),
             "cerebras" => Ok(Self::Cerebras), "sambanova" => Ok(Self::Sambanova), "deepseek" => Ok(Self::Deepseek), "moonshot" | "kimi" => Ok(Self::Moonshot),
-            "zai" | "z_ai" | "glm" => Ok(Self::Zai), "minimax" => Ok(Self::Minimax), "dashscope" | "qwen" | "alibaba" => Ok(Self::Dashscope),
+            "zai" | "z_ai" | "glm" => Ok(Self::Zai), "minimax" => Ok(Self::Minimax), "dashscope" | "qwen" | "alibaba" => Ok(Self::Dashscope), "baidu" | "qianfan" | "baidu_qianfan" | "ernie" => Ok(Self::BaiduQianfan),
             "openai_compatible" | "compatible" => Ok(Self::OpenaiCompatible), _ => anyhow::bail!("unsupported provider: {value}; use a configured profile with protocol = \"openai_compatible\" for other providers"),
         }
     }
@@ -180,6 +201,15 @@ pub struct ResolvedProvider {
     pub headers: BTreeMap<String, String>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ResolvedService {
+    pub name: String,
+    pub protocol: String,
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub headers: BTreeMap<String, String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppConfig {
     #[serde(default = "default_provider")]
@@ -191,6 +221,8 @@ pub struct AppConfig {
     pub providers: BTreeMap<String, ProviderConfig>,
     #[serde(default)]
     pub channels: BTreeMap<String, ChannelConfig>,
+    #[serde(default)]
+    pub services: BTreeMap<String, ServiceConfig>,
 }
 
 fn default_provider() -> String {
@@ -208,6 +240,7 @@ impl Default for AppConfig {
             max_steps: default_max_steps(),
             providers: BTreeMap::new(),
             channels: BTreeMap::new(),
+            services: BTreeMap::new(),
         }
     }
 }
@@ -281,6 +314,29 @@ impl AppConfig {
             headers: configured.headers,
         })
     }
+
+    pub fn resolve_service(&self, requested: &str) -> Result<ResolvedService> {
+        let name = requested.trim().to_ascii_lowercase().replace('-', "_");
+        let service = self
+            .services
+            .get(&name)
+            .context("unknown configured service")?;
+        let api_key = service
+            .api_key_env
+            .as_deref()
+            .and_then(|key| env::var(key).ok())
+            .or_else(|| service.api_key.clone());
+        Ok(ResolvedService {
+            name,
+            protocol: service
+                .protocol
+                .clone()
+                .unwrap_or_else(|| "custom_http".into()),
+            api_key,
+            base_url: service.base_url.clone(),
+            headers: service.headers.clone(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -310,5 +366,55 @@ mod tests {
             .unwrap();
         assert_eq!(provider.kind, ProviderKind::OpenaiCompatible);
         assert_eq!(provider.model, "my-model");
+    }
+
+    #[test]
+    fn parses_a_separate_service_registry() {
+        let config: AppConfig = toml::from_str(
+            r#"
+            [services.firecrawl]
+            protocol = "web_extract"
+            base_url = "https://api.firecrawl.dev"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.services["firecrawl"].protocol.as_deref(),
+            Some("web_extract")
+        );
+    }
+
+    #[test]
+    fn resolves_a_service_key_from_the_configured_environment_name() {
+        let config: AppConfig = toml::from_str(
+            r#"
+            [services.firecrawl]
+            protocol = "web_extract"
+            api_key_env = "TC_TEST_FIRECRAWL_KEY"
+            "#,
+        )
+        .unwrap();
+        std::env::set_var("TC_TEST_FIRECRAWL_KEY", "test-key");
+        let service = config.resolve_service("firecrawl").unwrap();
+        std::env::remove_var("TC_TEST_FIRECRAWL_KEY");
+        assert_eq!(service.api_key.as_deref(), Some("test-key"));
+    }
+
+    #[test]
+    fn resolves_common_routing_profiles_without_custom_code() {
+        let config = AppConfig::default();
+        for name in [
+            "openrouter",
+            "groq",
+            "xai",
+            "mistral",
+            "perplexity",
+            "together",
+            "deepseek",
+        ] {
+            let provider = config.resolve_provider(Some(name), None).unwrap();
+            assert!(provider.base_url.as_deref().unwrap().starts_with("http"));
+            assert!(provider.kind.uses_openai_compatible_transport());
+        }
     }
 }

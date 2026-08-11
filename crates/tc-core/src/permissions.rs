@@ -12,7 +12,9 @@ pub enum Capability {
     Shell,
     InspectSystem,
     InstallPackage,
+    GenerateMedia,
     Plugin(String),
+    BridgeDispatch,
 }
 
 #[derive(Clone, Debug)]

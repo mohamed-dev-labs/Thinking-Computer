@@ -73,6 +73,11 @@ model = "qwen-plus"
 # base_url = "https://your-dashscope-openai-compatible-endpoint/v1/chat/completions"
 # DASHSCOPE_API_KEY
 
+[providers.baidu_qianfan]
+model = "ernie-4.5-8k-preview"
+# base_url = "https://your-qianfan-compatible-endpoint/v1/chat/completions"
+# QIANFAN_API_KEY
+
 # Any future compatible provider can be defined without recompiling.
 [providers.private_gateway]
 protocol = "openai_compatible"
@@ -88,3 +93,29 @@ webhook_secret_env = "TELEGRAM_WEBHOOK_SECRET"
 [channels.discord]
 allowed_senders = ["your-discord-user-id"]
 webhook_secret_env = "DISCORD_APPLICATION_PUBLIC_KEY"
+
+# Signal has no official bot/webhook platform. If you operate a trusted local
+# Signal adapter on the VM, normalize its output as {id, sender_id, text}.
+[channels.signal]
+allowed_senders = ["your-signal-sender-id"]
+
+# Services are not chat-model providers. They become available only when a
+# corresponding permission-gated tool or plugin is enabled.
+[services.firecrawl]
+protocol = "web_extract"
+base_url = "https://api.firecrawl.dev"
+api_key_env = "FIRECRAWL_API_KEY"
+
+[services.elevenlabs]
+protocol = "speech"
+base_url = "https://api.elevenlabs.io"
+api_key_env = "ELEVENLABS_API_KEY"
+
+[services.fal]
+protocol = "image"
+base_url = "https://fal.run"
+api_key_env = "FAL_KEY"
+
+[services.custom_service]
+protocol = "custom_http"
+base_url = "https://service.example/api"

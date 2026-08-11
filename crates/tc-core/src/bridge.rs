@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::{env, fs, path::PathBuf};
 
 use crate::config::ChannelConfig;
 
@@ -11,6 +12,7 @@ pub enum ChannelKind {
     Discord,
     Whatsapp,
     Line,
+    Signal,
     Generic,
 }
 
@@ -22,6 +24,7 @@ impl std::str::FromStr for ChannelKind {
             "discord" => Ok(Self::Discord),
             "whatsapp" | "whatsapp_cloud" => Ok(Self::Whatsapp),
             "line" => Ok(Self::Line),
+            "signal" => Ok(Self::Signal),
             "generic" | "stdin" => Ok(Self::Generic),
             _ => anyhow::bail!("unsupported bridge channel: {value}"),
         }
@@ -36,6 +39,66 @@ pub struct InboundMessage {
     pub conversation_id: Option<String>,
     pub text: String,
     pub received_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PairedSender {
+    pub channel: String,
+    pub sender_id: String,
+    pub paired_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PairingStore {
+    path: PathBuf,
+}
+
+impl PairingStore {
+    pub fn local() -> Self {
+        let root = env::var("TC_HOME").map(PathBuf::from).unwrap_or_else(|_| {
+            dirs::data_local_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("thinking-computer")
+        });
+        Self {
+            path: root.join("paired-senders.json"),
+        }
+    }
+
+    pub fn pair(&self, channel: &str, sender_id: &str) -> Result<PairedSender> {
+        let mut records = self.list()?;
+        if let Some(record) = records
+            .iter()
+            .find(|record| record.channel == channel && record.sender_id == sender_id)
+        {
+            return Ok(record.clone());
+        }
+        let record = PairedSender {
+            channel: channel.to_string(),
+            sender_id: sender_id.to_string(),
+            paired_at: Utc::now(),
+        };
+        records.push(record.clone());
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&self.path, serde_json::to_string_pretty(&records)?)?;
+        Ok(record)
+    }
+
+    pub fn contains(&self, channel: &str, sender_id: &str) -> Result<bool> {
+        Ok(self
+            .list()?
+            .iter()
+            .any(|record| record.channel == channel && record.sender_id == sender_id))
+    }
+
+    pub fn list(&self) -> Result<Vec<PairedSender>> {
+        if !self.path.exists() {
+            return Ok(Vec::new());
+        }
+        Ok(serde_json::from_str(&fs::read_to_string(&self.path)?)?)
+    }
 }
 
 pub fn normalize(channel: ChannelKind, body: &str) -> Result<InboundMessage> {
@@ -110,6 +173,17 @@ pub fn normalize(channel: ChannelKind, body: &str) -> Result<InboundMessage> {
                 received_at,
             })
         }
+        ChannelKind::Signal => Ok(InboundMessage {
+            id: value_string(payload.get("id"))?,
+            channel: "signal".into(),
+            sender_id: value_string(payload.get("sender_id"))?,
+            conversation_id: payload
+                .get("conversation_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            text: value_string(payload.get("text"))?,
+            received_at,
+        }),
         ChannelKind::Generic => Ok(InboundMessage {
             id: value_string(payload.get("id"))?,
             channel: "generic".into(),

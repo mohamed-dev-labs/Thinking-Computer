@@ -1,17 +1,26 @@
+use anyhow::Context;
 use anyhow::Result;
+use axum::{
+    body::Bytes,
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::Json,
+    routing::post,
+    Router,
+};
 use clap::{Parser, Subcommand};
 use rustyline::DefaultEditor;
 use serde_json::{json, Value};
 use std::{
     io::{self, BufRead, Write},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use tc_core::{
     config::ProviderKind, normalize_bridge_message, plugin::discover_plugins, sender_is_trusted,
     system_summary, Agent, AgentMemory, AppConfig, Approval, ApprovalRequest, Capability,
-    ChannelKind, PermissionPolicy, RegistrationTarget, ScheduleStore, SessionStore, ToolExecutor,
-    VmCapabilityProfile,
+    ChannelKind, PairingStore, PermissionPolicy, RegistrationTarget, ScheduleStore, SessionStore,
+    ToolExecutor, VmCapabilityProfile,
 };
 
 #[derive(Debug, Parser)]
@@ -55,6 +64,7 @@ enum Command {
     },
     Init,
     Config,
+    Services,
     Plugins {
         #[command(subcommand)]
         command: PluginCommand,
@@ -70,6 +80,10 @@ enum Command {
     Bridge {
         #[command(subcommand)]
         command: BridgeCommand,
+    },
+    Webhook {
+        #[command(subcommand)]
+        command: WebhookCommand,
     },
     /// Read JSON requests from stdin and return JSON responses for the Python/Hermes adapter.
     Rpc,
@@ -117,12 +131,50 @@ enum MemoryCommand {
 
 #[derive(Debug, Subcommand)]
 enum BridgeCommand {
+    Pair {
+        #[arg(long)]
+        channel: String,
+        #[arg(long)]
+        sender: String,
+    },
     Inspect {
         #[arg(long)]
         channel: String,
         #[arg(long)]
         payload: PathBuf,
     },
+    Dispatch {
+        #[arg(long)]
+        channel: String,
+        #[arg(long)]
+        payload: PathBuf,
+        #[arg(short, long)]
+        provider: Option<String>,
+        #[arg(short, long)]
+        model: Option<String>,
+        #[arg(long)]
+        session: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WebhookCommand {
+    /// Starts only when explicitly invoked. Received events are verified and audited, not auto-dispatched.
+    Listen {
+        #[arg(long)]
+        channel: String,
+        #[arg(long, default_value = "127.0.0.1:8787")]
+        bind: String,
+    },
+}
+
+#[derive(Clone)]
+struct WebhookState {
+    kind: ChannelKind,
+    channel: String,
+    secret: String,
+    allowed_senders: Vec<String>,
+    replay: Arc<Mutex<tc_core::ReplayGuard>>,
 }
 
 struct TerminalApproval;
@@ -183,12 +235,32 @@ async fn main() -> Result<()> {
                     .unwrap_or_else(|| "current directory".into())
             );
         }
+        Command::Services => {
+            if config.services.is_empty() {
+                println!("No optional services configured. Add [services.<name>] to config.toml.");
+            }
+            for name in config.services.keys() {
+                let service = config.resolve_service(name)?;
+                println!(
+                    "{} | protocol={} | endpoint={} | API key={}",
+                    service.name,
+                    service.protocol,
+                    service.base_url.as_deref().unwrap_or("not set"),
+                    if service.api_key.is_some() {
+                        "configured (redacted)"
+                    } else {
+                        "not configured"
+                    }
+                );
+            }
+        }
         Command::Plugins {
             command: PluginCommand::List,
         } => list_plugins()?,
         Command::Schedule { command } => schedule(command)?,
         Command::Memory { command } => memory(command, cli.yes)?,
-        Command::Bridge { command } => bridge(command, &config)?,
+        Command::Bridge { command } => bridge(command, &config, &cli).await?,
+        Command::Webhook { command } => webhook(command, &config).await?,
         Command::Rpc => rpc(&config, &cli).await?,
         Command::Doctor => {
             println!("platform: {}", system_summary());
@@ -227,6 +299,145 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+async fn webhook(command: &WebhookCommand, config: &AppConfig) -> Result<()> {
+    match command {
+        WebhookCommand::Listen { channel, bind } => {
+            let kind: ChannelKind = channel.parse()?;
+            let name = channel_name(kind).to_string();
+            let channel_config = config.channels.get(&name).context(
+                "configure [channels.<name>] with allowed_senders and webhook_secret_env before listening",
+            )?;
+            let secret_env = channel_config
+                .webhook_secret_env
+                .as_deref()
+                .context("webhook_secret_env is required for a listener")?;
+            let secret = std::env::var(secret_env)
+                .with_context(|| format!("set {secret_env} before listening"))?;
+            let state = WebhookState {
+                kind,
+                channel: name,
+                secret,
+                allowed_senders: channel_config.allowed_senders.clone(),
+                replay: Arc::new(Mutex::new(tc_core::ReplayGuard::new(10_000))),
+            };
+            let listener = tokio::net::TcpListener::bind(bind)
+                .await
+                .with_context(|| format!("cannot bind webhook listener on {bind}"))?;
+            println!(
+                "Listening for verified {} webhooks on http://{} (no auto-dispatch).",
+                state.channel, bind
+            );
+            axum::serve(
+                listener,
+                Router::new()
+                    .route("/webhook", post(receive_webhook))
+                    .with_state(state),
+            )
+            .await?;
+        }
+    }
+    Ok(())
+}
+
+fn channel_name(kind: ChannelKind) -> &'static str {
+    match kind {
+        ChannelKind::Telegram => "telegram",
+        ChannelKind::Discord => "discord",
+        ChannelKind::Whatsapp => "whatsapp",
+        ChannelKind::Line => "line",
+        ChannelKind::Signal => "signal",
+        ChannelKind::Generic => "generic",
+    }
+}
+
+async fn receive_webhook(
+    State(state): State<WebhookState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>, StatusCode> {
+    verify_webhook_request(&state, &headers, &body)?;
+    let message = normalize_bridge_message(
+        state.kind,
+        std::str::from_utf8(&body).map_err(|_| StatusCode::BAD_REQUEST)?,
+    )
+    .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let trusted_by_config = state
+        .allowed_senders
+        .iter()
+        .any(|sender| sender == &message.sender_id);
+    let trusted_by_pairing = PairingStore::local()
+        .contains(&message.channel, &message.sender_id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !trusted_by_config && !trusted_by_pairing {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let replay_id = format!("{}:{}", state.channel, message.id);
+    if !state
+        .replay
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .accept_once(replay_id)
+    {
+        return Err(StatusCode::CONFLICT);
+    }
+    AgentMemory::local()
+        .and_then(|memory| {
+            memory.append_audit(
+                "webhook_accepted",
+                &format!(
+                    "channel={}; sender={}; message_id={}",
+                    message.channel, message.sender_id, message.id
+                ),
+                true,
+            )
+        })
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({
+        "accepted": true,
+        "message_id": message.id,
+        "dispatched": false,
+        "next_step": "Use bridge dispatch after local review."
+    })))
+}
+
+fn verify_webhook_request(
+    state: &WebhookState,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<(), StatusCode> {
+    let header = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .ok_or(StatusCode::UNAUTHORIZED)
+    };
+    match state.kind {
+        ChannelKind::Telegram => {
+            if header("x-telegram-bot-api-secret-token")? == state.secret {
+                Ok(())
+            } else {
+                Err(StatusCode::UNAUTHORIZED)
+            }
+        }
+        ChannelKind::Discord => tc_core::verify_discord_ed25519(
+            &state.secret,
+            header("x-signature-ed25519")?,
+            header("x-signature-timestamp")?,
+            body,
+        )
+        .map_err(|_| StatusCode::UNAUTHORIZED),
+        _ => {
+            let signature = headers
+                .get("x-hub-signature-256")
+                .or_else(|| headers.get("x-thinking-computer-signature"))
+                .and_then(|value| value.to_str().ok())
+                .ok_or(StatusCode::UNAUTHORIZED)?;
+            tc_core::verify_hmac_sha256(&state.secret, body, signature)
+                .map_err(|_| StatusCode::UNAUTHORIZED)
+        }
+    }
+}
+
 fn memory(command: &MemoryCommand, assume_yes: bool) -> Result<()> {
     let memory = AgentMemory::local()?;
     match command {
@@ -244,17 +455,77 @@ fn memory(command: &MemoryCommand, assume_yes: bool) -> Result<()> {
     Ok(())
 }
 
-fn bridge(command: &BridgeCommand, config: &AppConfig) -> Result<()> {
+async fn bridge(command: &BridgeCommand, config: &AppConfig, cli: &Cli) -> Result<()> {
     match command {
+        BridgeCommand::Pair { channel, sender } => {
+            let kind: ChannelKind = channel.parse()?;
+            let record = PairingStore::local().pair(channel_name(kind), sender)?;
+            println!("{}", serde_json::to_string_pretty(&record)?);
+        }
         BridgeCommand::Inspect { channel, payload } => {
             let kind: ChannelKind = channel.parse()?;
             let message = normalize_bridge_message(kind, &std::fs::read_to_string(payload)?)?;
             let policy = config.channels.get(&message.channel);
-            let trusted = sender_is_trusted(policy, &message);
+            let trusted = sender_is_trusted(policy, &message)
+                || PairingStore::local().contains(&message.channel, &message.sender_id)?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(
                     &json!({"message": message, "trusted_sender": trusted, "next_step": if trusted {"review and explicitly dispatch through the Rust engine"} else {"deny: sender is not in the local allowlist"}})
+                )?
+            );
+        }
+        BridgeCommand::Dispatch {
+            channel,
+            payload,
+            provider,
+            model,
+            session,
+        } => {
+            let kind: ChannelKind = channel.parse()?;
+            let message = normalize_bridge_message(kind, &std::fs::read_to_string(payload)?)?;
+            let trusted = sender_is_trusted(config.channels.get(&message.channel), &message)
+                || PairingStore::local().contains(&message.channel, &message.sender_id)?;
+            if !trusted {
+                anyhow::bail!(
+                    "inbound message denied: sender {} is not in the {} allowlist",
+                    message.sender_id,
+                    message.channel
+                );
+            }
+            if !cli.yes
+                && !TerminalApproval.approve(&ApprovalRequest {
+                    capability: Capability::BridgeDispatch,
+                    summary: format!(
+                    "Dispatch inbound {} message from trusted sender {} to the Rust agent engine",
+                    message.channel, message.sender_id
+                ),
+                })?
+            {
+                anyhow::bail!("inbound message dispatch was denied by the user");
+            }
+            let answer = agent_for(
+                config,
+                cli,
+                provider.as_deref(),
+                model.as_deref(),
+                session.clone(),
+            )
+            .await?
+            .run(&message.text)
+            .await?;
+            AgentMemory::local()?.append_audit(
+                "bridge_dispatch",
+                &format!(
+                    "channel={}; sender={}; message_id={}",
+                    message.channel, message.sender_id, message.id
+                ),
+                true,
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    &json!({"message_id": message.id, "channel": message.channel, "answer": answer})
                 )?
             );
         }

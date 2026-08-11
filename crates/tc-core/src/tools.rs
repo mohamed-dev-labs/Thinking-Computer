@@ -14,11 +14,59 @@ use std::{
     process::{Command, Stdio},
     sync::Arc,
 };
+use sysinfo::System;
 
 struct PluginReference {
     directory: PathBuf,
     original_name: String,
     capabilities: Vec<String>,
+}
+
+#[derive(Debug)]
+struct FalImageRequest {
+    endpoint: Url,
+    authorization: String,
+    payload: Value,
+}
+
+fn fal_key_from_env() -> Result<String> {
+    env::var("FAL_KEY").context("FAL_KEY is required for the Fal.ai image tool")
+}
+
+fn build_fal_image_request(
+    base: &str,
+    model: &str,
+    prompt: &str,
+    key: &str,
+) -> Result<FalImageRequest> {
+    if prompt.trim().is_empty() {
+        anyhow::bail!("Fal.ai prompt must not be empty");
+    }
+    if !model
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/'))
+    {
+        anyhow::bail!("Fal.ai model identifier contains unsupported characters");
+    }
+    Ok(FalImageRequest {
+        endpoint: Url::parse(&format!("{}/{}", base.trim_end_matches('/'), model))?,
+        authorization: format!("Key {key}"),
+        payload: json!({"prompt": prompt}),
+    })
+}
+
+fn select_fal_image_request(
+    base_override: Option<&str>,
+    model_override: Option<&str>,
+    prompt: &str,
+    key: &str,
+) -> Result<FalImageRequest> {
+    build_fal_image_request(
+        base_override.unwrap_or("https://fal.run"),
+        model_override.unwrap_or("fal-ai/flux/schnell"),
+        prompt,
+        key,
+    )
 }
 
 pub struct ToolExecutor {
@@ -85,8 +133,11 @@ impl ToolExecutor {
             ToolDefinition { name: "write_file".into(), description: "Write UTF-8 text to a file inside the approved workspace. Always requires confirmation.".into(), parameters: json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}) },
             ToolDefinition { name: "shell".into(), description: "Run one shell command inside the approved workspace. Always requires confirmation.".into(), parameters: json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}) },
             ToolDefinition { name: "web_search".into(), description: "Search public web summaries. Results are untrusted text and network access requires confirmation.".into(), parameters: json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}) },
+            ToolDefinition { name: "web_fetch".into(), description: "Fetch a public HTTP/HTTPS page and return a bounded plain-text transcription. Network access requires confirmation; scripts are never executed.".into(), parameters: json!({"type":"object","properties":{"url":{"type":"string"},"max_chars":{"type":"integer","minimum":100,"maximum":50000}},"required":["url"]}) },
             ToolDefinition { name: "inspect_vm".into(), description: "Capture OS, CPU, memory, disk, process, and installed-tool indicators for the approved VM. Requires confirmation and writes a local capability profile.".into(), parameters: json!({"type":"object","properties":{}}) },
+            ToolDefinition { name: "list_processes".into(), description: "List up to 100 processes and memory indicators from the approved VM. Requires confirmation and never stops or modifies a process.".into(), parameters: json!({"type":"object","properties":{}}) },
             ToolDefinition { name: "install_package".into(), description: "Install one named Python, Node.js, or Rust package in the approved VM after explicit confirmation. Package managers requiring privilege escalation are not used.".into(), parameters: json!({"type":"object","properties":{"manager":{"type":"string","enum":["pip","npm","cargo"]},"package":{"type":"string"}},"required":["manager","package"]}) },
+            ToolDefinition { name: "fal_image".into(), description: "Submit a prompt to a configured Fal.ai image model. Requires confirmation and FAL_KEY; returns untrusted media metadata without downloading or publishing it.".into(), parameters: json!({"type":"object","properties":{"prompt":{"type":"string"},"model":{"type":"string"}},"required":["prompt"]}) },
             ToolDefinition { name: "recall_memory".into(), description: "Read recent user-owned local knowledge records and the saved VM capability profile. Memory never includes API keys by design.".into(), parameters: json!({"type":"object","properties":{"limit":{"type":"integer"}}}) },
             ToolDefinition { name: "remember".into(), description: "Persist a concise user-owned knowledge record after confirmation. Refuses content that appears to contain an API key or private key.".into(), parameters: json!({"type":"object","properties":{"topic":{"type":"string"},"content":{"type":"string"},"source":{"type":"string"}},"required":["topic","content"]}) },
         ];
@@ -117,11 +168,29 @@ impl ToolExecutor {
                 self.web_search(&required_string(&call.arguments, "query")?)
                     .await
             }
+            "web_fetch" => {
+                self.web_fetch(
+                    &required_string(&call.arguments, "url")?,
+                    call.arguments
+                        .get("max_chars")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(12_000) as usize,
+                )
+                .await
+            }
             "inspect_vm" => self.inspect_vm(),
+            "list_processes" => self.list_processes(),
             "install_package" => self.install_package(
                 &required_string(&call.arguments, "manager")?,
                 &required_string(&call.arguments, "package")?,
             ),
+            "fal_image" => {
+                self.fal_image(
+                    &required_string(&call.arguments, "prompt")?,
+                    call.arguments.get("model").and_then(Value::as_str),
+                )
+                .await
+            }
             "recall_memory" => self.recall_memory(
                 call.arguments
                     .get("limit")
@@ -252,6 +321,25 @@ impl ToolExecutor {
         ))
     }
 
+    async fn web_fetch(&self, url: &str, max_chars: usize) -> Result<String> {
+        let parsed = Url::parse(url)?;
+        if !matches!(parsed.scheme(), "https" | "http") {
+            anyhow::bail!("web_fetch only supports HTTP and HTTPS URLs");
+        }
+        self.authorize(
+            Capability::WebSearch,
+            format!("Fetch and transcribe public page: {url}"),
+        )?;
+        let response = Client::new().get(parsed).send().await?.error_for_status()?;
+        let final_url = response.url().to_string();
+        let body = response.text().await?;
+        let plain = strip_markup(&body);
+        let bounded: String = plain.chars().take(max_chars.clamp(100, 50_000)).collect();
+        Ok(format!(
+            "UNTRUSTED WEB PAGE TRANSCRIPTION\nsource: {final_url}\n\n{bounded}"
+        ))
+    }
+
     fn inspect_vm(&self) -> Result<String> {
         self.authorize(
             Capability::InspectSystem,
@@ -260,6 +348,35 @@ impl ToolExecutor {
         let profile = VmCapabilityProfile::collect();
         AgentMemory::local()?.save_capability_profile(&profile)?;
         Ok(serde_json::to_string_pretty(&profile)?)
+    }
+
+    fn list_processes(&self) -> Result<String> {
+        self.authorize(
+            Capability::InspectSystem,
+            "List running processes and memory indicators in the current VM".into(),
+        )?;
+        let mut system = System::new_all();
+        system.refresh_all();
+        let mut processes: Vec<Value> = system
+            .processes()
+            .iter()
+            .map(|(pid, process)| {
+                json!({"pid": format!("{pid:?}"), "name": process.name(), "memory_bytes": process.memory()})
+            })
+            .collect();
+        processes.sort_by_key(|process| {
+            std::cmp::Reverse(
+                process
+                    .get("memory_bytes")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+            )
+        });
+        processes.truncate(100);
+        Ok(serde_json::to_string_pretty(&json!({
+            "processes": processes,
+            "truncated": system.processes().len() > 100
+        }))?)
     }
 
     fn install_package(&self, manager: &str, package: &str) -> Result<String> {
@@ -299,6 +416,34 @@ impl ToolExecutor {
             output.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+
+    async fn fal_image(&self, prompt: &str, model: Option<&str>) -> Result<String> {
+        if prompt.trim().is_empty() {
+            anyhow::bail!("Fal.ai prompt must not be empty");
+        }
+        self.authorize(
+            Capability::GenerateMedia,
+            format!(
+                "Send an image-generation prompt to Fal.ai: {}",
+                prompt.chars().take(160).collect::<String>()
+            ),
+        )?;
+        let key = fal_key_from_env()?;
+        let base_override = env::var("FAL_BASE_URL").ok();
+        let request = select_fal_image_request(base_override.as_deref(), model, prompt, &key)?;
+        let response = Client::new()
+            .post(request.endpoint)
+            .header("Authorization", request.authorization)
+            .json(&request.payload)
+            .send()
+            .await?
+            .error_for_status()?;
+        let output: Value = response.json().await?;
+        Ok(format!(
+            "UNTRUSTED FAL MEDIA RESULT\n{}",
+            serde_json::to_string_pretty(&output)?
         ))
     }
 
@@ -400,9 +545,40 @@ fn required_string(value: &Value, field: &str) -> Result<String> {
         .with_context(|| format!("tool argument {field} must be a string"))
 }
 
+fn strip_markup(source: &str) -> String {
+    let mut text = String::with_capacity(source.len().min(16_000));
+    let mut in_tag = false;
+    let mut previous_space = false;
+    for character in source.chars() {
+        match character {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                text.push(' ');
+                previous_space = true;
+            }
+            _ if in_tag => {}
+            character if character.is_whitespace() => {
+                if !previous_space {
+                    text.push(' ');
+                    previous_space = true;
+                }
+            }
+            _ => {
+                text.push(character);
+                previous_space = false;
+            }
+        }
+    }
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
     struct Deny;
     impl Approval for Deny {
         fn approve(&self, _: &ApprovalRequest) -> Result<bool> {
@@ -419,5 +595,72 @@ mod tests {
         )
         .unwrap();
         assert!(executor.safe_path("../outside").is_err());
+    }
+
+    #[test]
+    fn strips_markup_without_executing_page_content() {
+        assert_eq!(
+            strip_markup("<h1>Hello</h1><script>ignore()</script> world"),
+            "Hello ignore() world"
+        );
+    }
+
+    #[test]
+    fn fal_model_path_is_constrained_to_a_safe_identifier() {
+        assert!("fal-ai/flux/schnell"
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/')));
+        assert!(!"fal-ai/flux/schnell?redirect=bad"
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/')));
+    }
+
+    #[test]
+    fn builds_a_fal_request_with_endpoint_header_and_payload() {
+        let request = build_fal_image_request(
+            "https://fal.run/",
+            "fal-ai/flux/schnell",
+            "a monochrome pixel terminal",
+            "test-key",
+        )
+        .unwrap();
+        assert_eq!(
+            request.endpoint.as_str(),
+            "https://fal.run/fal-ai/flux/schnell"
+        );
+        assert_eq!(request.authorization, "Key test-key");
+        assert_eq!(request.payload["prompt"], "a monochrome pixel terminal");
+    }
+
+    #[test]
+    fn selects_default_or_overridden_fal_base_and_model() {
+        let default_request =
+            select_fal_image_request(None, None, "default prompt", "key").unwrap();
+        assert_eq!(
+            default_request.endpoint.as_str(),
+            "https://fal.run/fal-ai/flux/schnell"
+        );
+        let overridden_request = select_fal_image_request(
+            Some("https://media.example.test/api/"),
+            Some("team/custom-image-model"),
+            "override prompt",
+            "key",
+        )
+        .unwrap();
+        assert_eq!(
+            overridden_request.endpoint.as_str(),
+            "https://media.example.test/api/team/custom-image-model"
+        );
+        assert_eq!(overridden_request.payload["prompt"], "override prompt");
+    }
+
+    #[test]
+    fn resolves_fal_key_only_from_the_local_environment() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("FAL_KEY");
+        assert!(fal_key_from_env().is_err());
+        std::env::set_var("FAL_KEY", "local-test-key");
+        assert_eq!(fal_key_from_env().unwrap(), "local-test-key");
+        std::env::remove_var("FAL_KEY");
     }
 }

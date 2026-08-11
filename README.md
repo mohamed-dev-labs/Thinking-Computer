@@ -19,8 +19,9 @@ Thinking Computer is an open-source CLI agent designed to operate inside a dedic
 | Hermes-compatible input | A dependency-free Python adapter accepts a normalized Hermes-style task event and forwards it to Rust over a local JSON protocol. Python never owns shell access, policy decisions, or memory persistence. |
 | Provider registry | Native adapters for OpenAI, Anthropic, Gemini, and Ollama, plus a configurable OpenAI-compatible transport for routing services and many hosted inference providers. |
 | Local memory | JSONL sessions, user-approved knowledge records, VM capability snapshots, and audit events stored locally under `TC_HOME` or the OS application-data directory. |
-| Computer use | Workspace-scoped file reads and writes, guarded shell commands, guarded public web summaries, VM capability inspection, and approved `pip`, `npm`, or `cargo` package installation. |
-| Scheduling | Local task definitions with Cron validation and exportable Unix crontab lines. The tool does not silently install a background daemon or register a task with the OS. |
+| Computer use | Workspace-scoped file reads and writes, guarded shell commands, guarded web search/page transcription, VM capability inspection, and approved `pip`, `npm`, or `cargo` package installation. |
+| Scheduling | Local task definitions with Cron validation and generated reviewable templates for Linux/macOS Cron and Windows Task Scheduler. The tool does not silently register a task. |
+| Channels and webhooks | Telegram, Discord, WhatsApp, LINE, Signal-adapter, and generic JSON envelopes can be normalized, allowlisted, inspected, and explicitly dispatched. An optional listener verifies signatures and records events without auto-running the agent. |
 | Extensibility | A Node.js plugin host using one-shot JSON over standard input/output. Plugins remain behind the Rust approval boundary. |
 
 ## Architecture
@@ -56,7 +57,7 @@ Thinking Computer treats model output, web results, plugin output, file contents
 | Read file | Allowed only inside the approved workspace. | Canonical paths escaping the workspace are rejected. |
 | Write file | Requires confirmation. | Canonical paths escaping the workspace are rejected. |
 | Shell | Requires confirmation. | Runs from the workspace; obvious destructive or privileged patterns are rejected; `sudo` is never added. |
-| Web search | Requires confirmation. | Results are marked as untrusted text. |
+| Web search and page transcription | Requires confirmation. | Results are marked as untrusted text; fetched pages are converted to bounded text and page scripts are never executed. |
 | VM inspection | Requires confirmation. | Persists OS/resource/tool indicators locally; it does not collect credentials. |
 | Package install | Requires confirmation. | Supports `pip`, `npm`, and `cargo`; it does not run privileged system-package commands. |
 | Memory write | Requires confirmation. | Rejects values that resemble API keys, bearer tokens, or private-key blocks. |
@@ -134,8 +135,12 @@ Thinking Computer separates **model providers** from other capabilities. A model
 | Transport | Profiles currently represented | Credential environment variable |
 | --- | --- | --- |
 | Native | OpenAI, Anthropic, Gemini, Ollama | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or local Ollama configuration. |
-| OpenAI-compatible | OpenRouter, Groq, xAI, Mistral, NVIDIA NIM, Cloudflare Workers AI, Perplexity, Together, Fireworks, Cerebras, SambaNova, DeepSeek, Moonshot Kimi, Z.AI GLM, MiniMax, and DashScope/Qwen. | Provider-specific variables such as `OPENROUTER_API_KEY`, `GROQ_API_KEY`, or the provider profile’s key. |
+| OpenAI-compatible | OpenRouter, Groq, xAI, Mistral, NVIDIA NIM, Cloudflare Workers AI, Perplexity, Together, Fireworks, Cerebras, SambaNova, DeepSeek, Moonshot Kimi, Z.AI GLM, MiniMax, DashScope/Qwen, and Baidu Qianfan/ERNIE. | Provider-specific variables such as `OPENROUTER_API_KEY`, `GROQ_API_KEY`, or the provider profile’s key. |
 | Configurable gateway | Any endpoint implementing compatible chat-completions tool calling. | `OPENAI_COMPATIBLE_API_KEY` or `providers.<name>.api_key`. |
+
+Other services are intentionally registered separately from model routing. The generated configuration includes profiles for **Firecrawl** (`web_extract`), **ElevenLabs** (`speech`), and **Fal.ai** (`image`), plus a generic `custom_http` service. Run `thinking-computer services` to inspect only the locally configured service names, protocols, and endpoints; keys remain redacted and are best supplied through environment variables.
+
+Fal.ai additionally has a guarded `fal_image` agent tool. It reads `FAL_KEY` locally, posts an approved image prompt to `fal-ai/flux/schnell` by default, and returns only the untrusted provider JSON/temporary media URL. It does **not** download, publish, or run media automatically. Set `FAL_BASE_URL` only when using a compatible private endpoint. The request format and authentication choice are documented in [the Fal.ai integration record](docs/fal-api-research.md).[7]
 
 Vendor endpoints can differ by account, region, model, and capability. The bundled `config.example.toml` is therefore the source of truth for the exact endpoint field and profile shape. A private gateway can be added without recompiling:
 
@@ -164,10 +169,31 @@ thinking-computer schedule add \
   --provider ollama \
   "Summarize the approved workspace and write a short daily note."
 
-thinking-computer schedule export
+thinking-computer schedule export --target linux
+thinking-computer schedule export --target macos
+thinking-computer schedule export --target windows
 ```
 
-For an externally reachable webhook or messaging bridge, run a reviewed bridge process on a VM you control, with a verified provider signature, sender allowlist, rate limit, and a separate capability policy. A personal device is not the preferred host for that process.
+For an externally reachable webhook or messaging bridge, run a reviewed bridge process on a VM you control. The optional listener is deliberately **verify-and-audit only**: it checks the provider signature, trusted-sender allowlist, and replay ID, then records the event locally. It never dispatches an inbound message to the agent without a separate, visible `bridge dispatch` action.
+
+```bash
+# Bind locally first. Put the secret in the environment, never in a committed file.
+export TELEGRAM_WEBHOOK_SECRET="..."
+thinking-computer webhook listen --channel telegram --bind 127.0.0.1:8787
+
+# Inspect or explicitly dispatch a captured JSON payload after local review.
+thinking-computer bridge inspect --channel telegram --payload update.json
+thinking-computer bridge dispatch --channel telegram --payload update.json
+```
+
+For a one-off trusted sender, pair the sender ID locally instead of placing an access token in a command or repository file. Pairing writes only an ID, channel name, and timestamp under `TC_HOME`; it does not make a webhook public or auto-dispatch messages.
+
+```bash
+thinking-computer bridge pair --channel signal --sender "+15551234567"
+thinking-computer bridge inspect --channel signal --payload signal-event.json
+```
+
+See [the channel and webhook research record](docs/channel-api-research.md) and [background-service templates](docs/background-services.md) before exposing a listener publicly.
 
 ## Hermes-compatible Python adapter
 
@@ -215,3 +241,4 @@ Thinking Computer is licensed under the [MIT License](LICENSE). The Rust/C++/Nod
 [4]: https://docs.anthropic.com/en/docs/build-with-claude/tool-use "Anthropic tool-use documentation"
 [5]: https://ai.google.dev/gemini-api/docs/function-calling "Gemini function-calling documentation"
 [6]: https://docs.ollama.com/capabilities/tool-calling "Ollama tool-calling documentation"
+[7]: https://fal.ai/docs/documentation/setting-up/authentication "Fal.ai authentication documentation"
