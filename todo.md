@@ -41,3 +41,33 @@
 - [x] Add generated registration helpers for macOS/Linux Cron and Windows Task Scheduler, with tests for each command template.
 - [x] Align C++ bridge claims with implementation by exposing a small, auditable system-inspection snapshot through C++ and consuming it from Rust.
 - [x] Add an approved logo record with the generated asset checksum and visual acceptance criteria for the mono-pixel wordmark.
+- [x] Define VM-first autonomous-agent boundaries, quality gates, and a safe 20-run hourly improvement plan without artificial commits.
+- [x] Implement a local Skills registry with explicit manifests, versioning, user review, and safe activation controls.
+- [ ] Implement a Sub-Agent and Expert-task model with bounded delegation, typed outputs, and Rust-side permission inheritance.
+- [x] Build an OpenTUI-style terminal user interface using the mono-pixel Thinking Computer identity.
+- [x] Add explicit browse/search workflows with provenance records and prompt-injection-safe handling of fetched content.
+- [x] Add adapter-driven outbound Telegram and Discord message delivery with local credentials and trusted-recipient policy checks.
+- [ ] Add user-controlled scheduled improvement runs with test/security gates, audit logs, failure stop conditions, and meaningful Git commits only.
+- [x] Define a 20-hour continuous improvement runbook with phase budgets, explicit scope limits, and a maximum meaningful-commit policy.
+- [x] Implement a resumable local improvement worker with durable state, per-phase audit logs, and automatic halt on failed tests or security checks.
+- [x] Provide VM installation and supervision templates for running one controlled 20-hour improvement session without relying on this chat to remain active.
+- [x] Ensure the improvement worker applies only bounded, quality-gated changes autonomously and records rationale, tests, and residual risk for every completed task.
+- [x] Add a manifest-driven local Skill and Plugin creation workflow with Rust policy checks, validation, and audit records.
+- [x] Add open-source TUI implementation research and a terminal UI plan consistent with the mono-pixel Thinking Computer identity.
+- [x] Add policy-gated outbound channel adapters for Telegram, WhatsApp, Discord, and generic messaging transports with mock tests and trusted-recipient controls.
+- [x] Add an explicit security scan gate and a halt-on-security-gate-failure test to the continuous improvement worker.
+- [x] Persist the exact successful quality commands for every completed improvement task report.
+- [x] Add a Rust-validated plugin creation workflow with manifest generation, local audit records, and tests.
+- [x] Verify available GitHub and Cloudflare permissions in read-only mode, and document the boundary between inspection and user-authorized publishing or DNS changes.
+- [x] Create detailed English open-source documentation pages for architecture, safety, providers, channels, Skills, Plugins, and the clean-room comparison with Hermes and OpenClaw.
+- [x] Define a separate Vercel-inspired, dark marketing-site information architecture with no traditional footer.
+- [x] Build and validate the separate marketing site without changing the CLI product surface.
+- [x] Verify the connected Cloudflare Workers account, deploy the approved marketing site, and make https://tc.clatterlabs.workers.dev the public route.
+- [ ] Sync all tested source, documentation, website, and deployment configuration changes to the public GitHub repository in meaningful commits.
+- [ ] Run documented, bounded post-release improvement cycles that research relevant agent capabilities, implement only verified changes, and halt automatically on security or quality-gate failure.
+- [ ] Keep every future enhancement measurable by user value, security posture, test coverage, or documented compatibility; reject artificial line-count targets and non-meaningful commits.
+- [x] Refine the marketing site with original technical motion, contrast, and density informed by x.ai/bot, without copying xAI/Grok names, logos, or protected brand identity.
+- [ ] Add a Rust-side Skill activation workflow with explicit enable state, review controls, local audit records, and tests.
+- [ ] Expand the mono-pixel TUI into an interactive terminal workflow with navigation and bounded agent/task actions.
+- [ ] Persist provenance and audit metadata for web search and web fetch actions while retaining prompt-injection-safe handling.
+- [x] Add a dedicated English providers guide and link it from the documentation index and README.

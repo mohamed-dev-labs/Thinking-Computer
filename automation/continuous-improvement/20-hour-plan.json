@@ -1,0 +1,35 @@
+{
+  "name": "thinking-computer-20-hour-improvement",
+  "version": 1,
+  "slot_minutes": 60,
+  "quality_gates": [
+    ["cargo", "fmt", "--all", "--", "--check"],
+    ["cargo", "test", "--workspace"],
+    ["python3", "-m", "py_compile", "python/hermes_adapter/thinking_computer_adapter.py"],
+    ["node", "--check", "packages/plugin-host/index.mjs"],
+    {"label": "security-gate", "command": ["python3", "automation/continuous-improvement/security_scan.py", "--repo", "."]},
+    ["git", "diff", "--check"]
+  ],
+  "tasks": [
+    {"id": "01-provider-future-skills", "title": "Provider registry and future Skills research", "prompt": "Review the provider registry and local Skills manifests. Add only documented, testable provider profiles or skill schema improvements. Preserve local-first secrets and update tests."},
+    {"id": "02-regression-security", "title": "Regression tests and security review", "prompt": "Run the full quality suite, inspect recent code for permission bypasses, path escapes, secret persistence, unsafe command construction, and fix only verified issues with tests."},
+    {"id": "03-product-backlog", "title": "Small product feature from backlog", "prompt": "Choose one bounded incomplete CLI feature that improves local VM use. Implement it with unit tests and documentation; do not redesign unrelated modules."},
+    {"id": "04-sub-agents", "title": "Sub-agent and expert delegation", "prompt": "Implement bounded specialist-task definitions with typed outputs, step budgets, and inherited Rust permission policy. Do not allow delegated agents to gain additional capabilities."},
+    {"id": "05-tui-foundation", "title": "Mono-pixel terminal interface", "prompt": "Add a terminal user interface foundation that reflects the Thinking Computer mono-pixel identity while preserving a fully scriptable CLI mode."},
+    {"id": "06-memory-quality", "title": "Memory quality and provenance", "prompt": "Improve local memory record provenance, redaction, retrieval limits, and tests. Never persist provider keys, session cookies, or raw secrets."},
+    {"id": "07-safe-browsing", "title": "Safe web browsing workflow", "prompt": "Improve browse/search provenance and prompt-injection handling. Treat fetched pages as untrusted data and preserve explicit network approvals."},
+    {"id": "08-skills-plugins", "title": "Skills and plugin lifecycle", "prompt": "Implement or improve manifests, validation, activation review, and audit records for Skills and Node.js plugins. No plugin may bypass Rust policy."},
+    {"id": "09-provider-contracts", "title": "Provider compatibility contracts", "prompt": "Add fixture-based provider request/response tests or documentation for native and compatible APIs without embedding credentials or sending live requests."},
+    {"id": "10-telegram-outbound", "title": "Telegram outbound adapter", "prompt": "Add a narrow, policy-gated Telegram outbound adapter with trusted-recipient checks, environment-only token use, and mock transport tests."},
+    {"id": "11-discord-outbound", "title": "Discord outbound adapter", "prompt": "Add a narrow, policy-gated Discord outbound adapter with trusted-recipient checks, environment-only credentials, and mock transport tests."},
+    {"id": "12-channel-webhook-hardening", "title": "Channel and webhook hardening", "prompt": "Review signature verification, replay handling, sender pairing, payload bounds, and audit logging. Fix only verified weaknesses and add regression tests."},
+    {"id": "13-schedule-resilience", "title": "Schedule and background resilience", "prompt": "Improve local schedule persistence, task export, failure handling, and restart behavior. Do not install a persistent service automatically."},
+    {"id": "14-vm-capability-analytics", "title": "VM capability analytics", "prompt": "Improve VM capability profiles and resource analytics with bounded, read-only collection and tests. Avoid collecting personal data outside the VM workspace."},
+    {"id": "15-fal-media-safety", "title": "Fal.ai media safety", "prompt": "Review Fal.ai request construction, key handling, output handling, and provider-result labeling. Keep generated URLs untrusted and never auto-download media."},
+    {"id": "16-cross-platform-build", "title": "Cross-platform build readiness", "prompt": "Review Linux, macOS, and Windows installation and packaging paths. Add deterministic build checks or documentation; do not publish releases automatically."},
+    {"id": "17-accessibility", "title": "Terminal accessibility and usability", "prompt": "Improve terminal keyboard navigation, contrast, plain CLI fallback, error messages, and non-interactive behavior without introducing a graphical application."},
+    {"id": "18-dependency-audit", "title": "Dependency and supply-chain review", "prompt": "Review dependency locks and package boundaries. Add minimal validation or documentation for reproducible builds and avoid speculative upgrades."},
+    {"id": "19-documentation", "title": "English documentation consolidation", "prompt": "Consolidate README and docs so every implemented feature has accurate setup, security boundaries, and VM-first guidance. Remove stale claims."},
+    {"id": "20-final-audit", "title": "Final validation and release preparation", "prompt": "Run all quality gates, inspect the final diff, summarize remaining risks, and prepare one meaningful commit only if the gates pass."}
+  ]
+}

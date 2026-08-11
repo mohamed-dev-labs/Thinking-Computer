@@ -17,11 +17,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tc_core::{
-    config::ProviderKind, normalize_bridge_message, plugin::discover_plugins, sender_is_trusted,
-    system_summary, Agent, AgentMemory, AppConfig, Approval, ApprovalRequest, Capability,
-    ChannelKind, PairingStore, PermissionPolicy, RegistrationTarget, ScheduleStore, SessionStore,
-    ToolExecutor, VmCapabilityProfile,
+    config::ProviderKind, normalize_bridge_message, plugin::discover_plugins, recipient_is_trusted,
+    send_outbound_message, sender_is_trusted, system_summary, Agent, AgentMemory, AppConfig,
+    Approval, ApprovalRequest, Capability, ChannelKind, HttpOutboundTransport, PairingStore,
+    PermissionPolicy, PluginManifest, PluginStore, PluginTool, RegistrationTarget, ScheduleStore,
+    SessionStore, SkillManifest, SkillStore, ToolExecutor, VmCapabilityProfile,
 };
+
+mod tui;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -65,9 +68,14 @@ enum Command {
     Init,
     Config,
     Services,
+    Tui,
     Plugins {
         #[command(subcommand)]
         command: PluginCommand,
+    },
+    Skills {
+        #[command(subcommand)]
+        command: SkillCommand,
     },
     Schedule {
         #[command(subcommand)]
@@ -93,6 +101,31 @@ enum Command {
 #[derive(Debug, Subcommand)]
 enum PluginCommand {
     List,
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long, default_value = "0.1.0")]
+        version: String,
+        #[arg(long = "tool", required = true)]
+        tools: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SkillCommand {
+    List,
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long, default_value = "0.1.0")]
+        version: String,
+        #[arg(long)]
+        description: String,
+        #[arg(long)]
+        instructions: String,
+        #[arg(long = "capability")]
+        capabilities: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -154,6 +187,14 @@ enum BridgeCommand {
         model: Option<String>,
         #[arg(long)]
         session: Option<String>,
+    },
+    Send {
+        #[arg(long)]
+        channel: String,
+        #[arg(long)]
+        recipient: String,
+        #[arg(long)]
+        message: String,
     },
 }
 
@@ -254,9 +295,9 @@ async fn main() -> Result<()> {
                 );
             }
         }
-        Command::Plugins {
-            command: PluginCommand::List,
-        } => list_plugins()?,
+        Command::Tui => tui::run()?,
+        Command::Plugins { command } => plugins(command)?,
+        Command::Skills { command } => skills(command)?,
         Command::Schedule { command } => schedule(command)?,
         Command::Memory { command } => memory(command, cli.yes)?,
         Command::Bridge { command } => bridge(command, &config, &cli).await?,
@@ -334,6 +375,33 @@ async fn webhook(command: &WebhookCommand, config: &AppConfig) -> Result<()> {
                     .with_state(state),
             )
             .await?;
+        }
+    }
+    Ok(())
+}
+
+fn skills(command: &SkillCommand) -> Result<()> {
+    let store = SkillStore::local();
+    match command {
+        SkillCommand::List => {
+            println!("{}", serde_json::to_string_pretty(&store.list()?)?);
+        }
+        SkillCommand::Create {
+            name,
+            version,
+            description,
+            instructions,
+            capabilities,
+        } => {
+            let skill = store.create(SkillManifest {
+                name: name.clone(),
+                version: version.clone(),
+                description: description.clone(),
+                instructions: instructions.clone(),
+                capabilities: capabilities.clone(),
+                created_at: chrono::Utc::now(),
+            })?;
+            println!("{}", serde_json::to_string_pretty(&skill)?);
         }
     }
     Ok(())
@@ -527,6 +595,66 @@ async fn bridge(command: &BridgeCommand, config: &AppConfig, cli: &Cli) -> Resul
                 serde_json::to_string_pretty(
                     &json!({"message_id": message.id, "channel": message.channel, "answer": answer})
                 )?
+            );
+        }
+        BridgeCommand::Send {
+            channel,
+            recipient,
+            message,
+        } => {
+            let kind: ChannelKind = channel.parse()?;
+            let name = channel_name(kind);
+            let channel_config = config
+                .channels
+                .get(name)
+                .context("configure this channel before sending messages")?;
+            if !recipient_is_trusted(Some(channel_config), recipient) {
+                anyhow::bail!(
+                    "outbound message denied: recipient {} is not in the {} allowlist",
+                    recipient,
+                    name
+                );
+            }
+            if !cli.yes
+                && !TerminalApproval.approve(&ApprovalRequest {
+                    capability: Capability::BridgeDispatch,
+                    summary: format!(
+                        "Send {} characters to trusted {} recipient {}",
+                        message.chars().count(),
+                        name,
+                        recipient
+                    ),
+                })?
+            {
+                anyhow::bail!("outbound message delivery was denied by the user");
+            }
+            let delivery = send_outbound_message(
+                kind,
+                channel_config,
+                recipient,
+                message,
+                &HttpOutboundTransport::default(),
+            )
+            .await?;
+            AgentMemory::local()?.append_audit(
+                "bridge_send",
+                &format!(
+                    "channel={}; recipient={}; chars={}; status={}",
+                    delivery.channel,
+                    delivery.recipient,
+                    message.chars().count(),
+                    delivery.status
+                ),
+                true,
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "channel": delivery.channel,
+                    "recipient": delivery.recipient,
+                    "status": delivery.status,
+                    "response": delivery.response_summary,
+                }))?
             );
         }
     }
@@ -747,6 +875,51 @@ fn list_plugins() -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn plugins(command: &PluginCommand) -> Result<()> {
+    match command {
+        PluginCommand::List => list_plugins(),
+        PluginCommand::Create {
+            name,
+            version,
+            tools,
+        } => {
+            let manifest = PluginManifest {
+                name: name.clone(),
+                version: version.clone(),
+                entry: "index.mjs".into(),
+                tools: tools
+                    .iter()
+                    .map(|name| PluginTool {
+                        name: name.clone(),
+                        description: "Generated template tool; implement only after local review."
+                            .into(),
+                        parameters: json!({"type": "object", "properties": {}}),
+                        capabilities: vec![],
+                    })
+                    .collect(),
+            };
+            let result = PluginStore::local().create(manifest.clone());
+            let success = result.is_ok();
+            AgentMemory::local()?.append_audit(
+                "plugin_create",
+                &format!(
+                    "name={}; version={}; tools={}",
+                    manifest.name,
+                    manifest.version,
+                    manifest.tools.len()
+                ),
+                success,
+            )?;
+            let path = result?;
+            println!(
+                "Created {}. The generated tool template has no privileged behavior; review and implement it before invocation.",
+                path.display()
+            );
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

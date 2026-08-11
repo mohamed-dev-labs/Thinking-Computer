@@ -22,7 +22,13 @@ pub struct ProviderConfig {
 pub struct ChannelConfig {
     #[serde(default)]
     pub allowed_senders: Vec<String>,
+    #[serde(default)]
+    pub allowed_recipients: Vec<String>,
     pub webhook_secret_env: Option<String>,
+    pub outbound_token_env: Option<String>,
+    pub outbound_phone_number_id_env: Option<String>,
+    pub outbound_endpoint_env: Option<String>,
+    pub outbound_api_version: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

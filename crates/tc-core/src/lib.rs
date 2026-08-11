@@ -5,10 +5,12 @@ pub mod bridge;
 pub mod config;
 pub mod memory;
 pub mod model;
+pub mod outbound;
 pub mod permissions;
 pub mod plugin;
 pub mod providers;
 pub mod schedule;
+pub mod skills;
 pub mod tools;
 pub mod webhook;
 
@@ -23,9 +25,14 @@ pub use config::{
 };
 pub use memory::{AgentMemory, KnowledgeRecord, SessionStore, VmCapabilityProfile};
 pub use model::{ChatMessage, Role, ToolCall, ToolDefinition};
+pub use outbound::{
+    recipient_is_trusted, send_message as send_outbound_message, HttpOutboundTransport,
+    OutboundDelivery, OutboundTransport,
+};
 pub use permissions::{Approval, ApprovalRequest, Capability, PermissionPolicy};
-pub use plugin::{PluginManifest, PluginTool};
+pub use plugin::{PluginManifest, PluginStore, PluginTool};
 pub use schedule::{RegistrationTarget, ScheduleStore, ScheduledTask};
+pub use skills::{SkillManifest, SkillStore};
 pub use tools::ToolExecutor;
 pub use webhook::{request_fingerprint, verify_discord_ed25519, verify_hmac_sha256, ReplayGuard};
 

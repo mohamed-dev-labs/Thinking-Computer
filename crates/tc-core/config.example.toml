@@ -88,11 +88,30 @@ base_url = "https://gateway.example/v1/chat/completions"
 # A bridge treats empty allowlists as denied. Add only sender IDs you control.
 [channels.telegram]
 allowed_senders = ["your-telegram-user-or-chat-id"]
+allowed_recipients = ["your-telegram-user-or-chat-id"]
 webhook_secret_env = "TELEGRAM_WEBHOOK_SECRET"
+# outbound_token_env = "TELEGRAM_BOT_TOKEN"
 
 [channels.discord]
 allowed_senders = ["your-discord-user-id"]
+allowed_recipients = ["your-discord-channel-id"]
 webhook_secret_env = "DISCORD_APPLICATION_PUBLIC_KEY"
+# outbound_token_env = "DISCORD_BOT_TOKEN"
+
+# WhatsApp uses the official Cloud API. Configure both values as environment
+# variables; the recipient must be in this explicit allowlist.
+[channels.whatsapp]
+allowed_senders = ["your-whatsapp-sender-id"]
+allowed_recipients = ["15555550123"]
+# outbound_token_env = "WHATSAPP_ACCESS_TOKEN"
+# outbound_phone_number_id_env = "WHATSAPP_PHONE_NUMBER_ID"
+# outbound_api_version = "v25.0"
+
+# A generic HTTPS adapter receives {recipient, text} using Bearer auth.
+[channels.generic]
+allowed_recipients = ["your-reviewed-recipient-id"]
+# outbound_token_env = "GENERIC_CHANNEL_TOKEN"
+# outbound_endpoint_env = "GENERIC_CHANNEL_ENDPOINT"
 
 # Signal has no official bot/webhook platform. If you operate a trusted local
 # Signal adapter on the VM, normalize its output as {id, sender_id, text}.

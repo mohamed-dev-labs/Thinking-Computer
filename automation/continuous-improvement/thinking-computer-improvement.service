@@ -1,0 +1,19 @@
+[Unit]
+Description=Thinking Computer bounded 20-hour improvement worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Thinking-Computer
+Environment=TC_HOME=%h/.thinking-computer
+ExecStart=/usr/bin/python3 %h/Thinking-Computer/automation/continuous-improvement/run_improvement.py --repo %h/Thinking-Computer --execute-agent --commit
+Restart=no
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=%h/Thinking-Computer %h/.thinking-computer
+
+[Install]
+WantedBy=multi-user.target
