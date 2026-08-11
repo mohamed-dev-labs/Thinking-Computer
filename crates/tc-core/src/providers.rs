@@ -12,6 +12,8 @@ pub async fn complete(provider: &ResolvedProvider, messages: &[ChatMessage], too
         ProviderKind::Anthropic => anthropic(provider, messages, tools).await,
         ProviderKind::Gemini => gemini(provider, messages, tools).await,
         ProviderKind::Ollama => ollama(provider, messages, tools).await,
+        _ if provider.kind.uses_openai_compatible_transport() => openai(provider, messages, tools).await,
+        _ => anyhow::bail!("provider transport is not implemented: {}", provider.kind.as_str()),
     }
 }
 
@@ -44,9 +46,11 @@ async fn json_response(response: reqwest::Response) -> Result<Value> {
 }
 
 async fn openai(provider: &ResolvedProvider, messages: &[ChatMessage], tools: &[ToolDefinition]) -> Result<ChatMessage> {
-    let endpoint = provider.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".into());
+    let endpoint = provider.base_url.clone().context("OpenAI-compatible provider has no chat-completions endpoint")?;
     let body = json!({"model":provider.model,"messages":messages.iter().map(message_text).collect::<Vec<_>>(),"tools":openai_tools(tools),"tool_choice":"auto"});
-    let value = json_response(Client::new().post(endpoint).bearer_auth(remote_key(provider)?).json(&body).send().await?).await?;
+    let mut request = Client::new().post(endpoint).bearer_auth(remote_key(provider)?).json(&body);
+    for (name, value) in &provider.headers { request = request.header(name, value); }
+    let value = json_response(request.send().await?).await?;
     let message = value.pointer("/choices/0/message").context("OpenAI response has no message")?;
     let tool_calls = message.get("tool_calls").and_then(Value::as_array).unwrap_or(&Vec::new()).iter().map(|call| ToolCall {
         id: call.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
@@ -129,4 +133,3 @@ async fn ollama(provider: &ResolvedProvider, messages: &[ChatMessage], tools: &[
     }).collect();
     Ok(ChatMessage { role: Role::Assistant, content: message.get("content").and_then(Value::as_str).unwrap_or_default().to_string(), tool_calls, tool_call_id: None, tool_name: None })
 }
-

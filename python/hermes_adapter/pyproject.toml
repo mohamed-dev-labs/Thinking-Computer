@@ -1,0 +1,9 @@
+[project]
+name = "thinking-computer-hermes-adapter"
+version = "0.1.0"
+description = "Python/Hermes input adapter for the Rust-powered Thinking Computer engine"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[tool.setuptools]
+py-modules = ["thinking_computer_adapter"]

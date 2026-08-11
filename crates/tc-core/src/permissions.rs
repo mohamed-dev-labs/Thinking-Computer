@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
-pub enum Capability { ReadFile, WriteFile, WebSearch, Shell, Plugin(String) }
+pub enum Capability { ReadFile, WriteFile, WriteMemory, WebSearch, Shell, InspectSystem, InstallPackage, Plugin(String) }
 
 #[derive(Clone, Debug)]
 pub struct ApprovalRequest { pub capability: Capability, pub summary: String }
@@ -22,4 +22,3 @@ impl PermissionPolicy {
     }
     pub fn needs_confirmation(&self, capability: &Capability) -> bool { !self.assume_yes && !self.always_allowed.contains(capability) }
 }
-

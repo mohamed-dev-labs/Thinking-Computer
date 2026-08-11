@@ -1,8 +1,9 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use rustyline::DefaultEditor;
-use std::{path::PathBuf, sync::Arc};
-use tc_core::{Agent, Approval, ApprovalRequest, AppConfig, PermissionPolicy, SessionStore, ToolExecutor, config::ProviderKind, plugin::discover_plugins, system_summary};
+use serde_json::{json, Value};
+use std::{io::{self, BufRead, Write}, path::PathBuf, sync::Arc};
+use tc_core::{Agent, AgentMemory, Approval, ApprovalRequest, AppConfig, Capability, ChannelKind, PermissionPolicy, ScheduleStore, SessionStore, ToolExecutor, VmCapabilityProfile, config::ProviderKind, normalize_bridge_message, plugin::discover_plugins, sender_is_trusted, system_summary};
 
 #[derive(Debug, Parser)]
 #[command(name = "thinking-computer", version, about = "A local-first personal agent for your terminal")]
@@ -24,11 +25,36 @@ enum Command {
     Init,
     Config,
     Plugins { #[command(subcommand)] command: PluginCommand },
+    Schedule { #[command(subcommand)] command: ScheduleCommand },
+    Memory { #[command(subcommand)] command: MemoryCommand },
+    Bridge { #[command(subcommand)] command: BridgeCommand },
+    /// Read JSON requests from stdin and return JSON responses for the Python/Hermes adapter.
+    Rpc,
     Doctor,
 }
 
 #[derive(Debug, Subcommand)]
 enum PluginCommand { List }
+
+#[derive(Debug, Subcommand)]
+enum ScheduleCommand {
+    List,
+    Add {
+        #[arg(long)] name: String,
+        #[arg(long)] cron: String,
+        #[arg(long)] provider: Option<String>,
+        #[arg(long)] model: Option<String>,
+        #[arg(required = true, trailing_var_arg = true)] prompt: Vec<String>,
+    },
+    Remove { #[arg(long)] name: String },
+    Export,
+}
+
+#[derive(Debug, Subcommand)]
+enum MemoryCommand { Profile, Recall { #[arg(long, default_value_t = 10)] limit: usize } }
+
+#[derive(Debug, Subcommand)]
+enum BridgeCommand { Inspect { #[arg(long)] channel: String, #[arg(long)] payload: PathBuf } }
 
 struct TerminalApproval;
 impl Approval for TerminalApproval {
@@ -64,6 +90,10 @@ async fn main() -> Result<()> {
             println!("workspace: {}", cli.workspace.clone().or(config.workspace.clone()).map(|path| path.display().to_string()).unwrap_or_else(|| "current directory".into()));
         }
         Command::Plugins { command: PluginCommand::List } => list_plugins()?,
+        Command::Schedule { command } => schedule(command)?,
+        Command::Memory { command } => memory(command, cli.yes)?,
+        Command::Bridge { command } => bridge(command, &config)?,
+        Command::Rpc => rpc(&config, &cli).await?,
         Command::Doctor => {
             println!("platform: {}", system_summary());
             println!("config: {}", cli.config.clone().unwrap_or_else(AppConfig::config_path).display());
@@ -75,6 +105,92 @@ async fn main() -> Result<()> {
             println!("\n{answer}");
         }
         Command::Repl { provider, model } => repl(&config, &cli, provider.as_deref(), model.as_deref()).await?,
+    }
+    Ok(())
+}
+
+fn memory(command: &MemoryCommand, assume_yes: bool) -> Result<()> {
+    let memory = AgentMemory::local()?;
+    match command {
+        MemoryCommand::Profile => {
+            if !assume_yes && !TerminalApproval.approve(&ApprovalRequest { capability: Capability::InspectSystem, summary: "Capture OS, CPU, memory, disk, process, and installed-tool indicators for the current VM".into() })? { anyhow::bail!("VM profile capture was denied by the user"); }
+            let profile = VmCapabilityProfile::collect();
+            memory.save_capability_profile(&profile)?;
+            println!("{}", serde_json::to_string_pretty(&profile)?);
+        }
+        MemoryCommand::Recall { limit } => {
+            let value = json!({"capability_profile": memory.load_capability_profile()?, "knowledge": memory.recall(*limit)?});
+            println!("{}", serde_json::to_string_pretty(&value)?);
+        }
+    }
+    Ok(())
+}
+
+fn bridge(command: &BridgeCommand, config: &AppConfig) -> Result<()> {
+    match command {
+        BridgeCommand::Inspect { channel, payload } => {
+            let kind: ChannelKind = channel.parse()?;
+            let message = normalize_bridge_message(kind, &std::fs::read_to_string(payload)?)?;
+            let policy = config.channels.get(&message.channel);
+            let trusted = sender_is_trusted(policy, &message);
+            println!("{}", serde_json::to_string_pretty(&json!({"message": message, "trusted_sender": trusted, "next_step": if trusted {"review and explicitly dispatch through the Rust engine"} else {"deny: sender is not in the local allowlist"}}))?);
+        }
+    }
+    Ok(())
+}
+
+fn schedule(command: &ScheduleCommand) -> Result<()> {
+    let store = ScheduleStore::local()?;
+    match command {
+        ScheduleCommand::List => {
+            let tasks = store.list()?;
+            if tasks.is_empty() { println!("No local schedule definitions found."); }
+            for task in tasks { println!("{} | {} | {} | enabled={}", task.name, task.cron, task.provider.unwrap_or_else(|| "default".into()), task.enabled); }
+        }
+        ScheduleCommand::Add { name, cron, provider, model, prompt } => {
+            let task = store.add(name, cron, &prompt.join(" "), provider.clone(), model.clone())?;
+            println!("Saved local schedule definition {}. It has not been registered with the operating system.", task.name);
+            println!("To register it on a Unix VM, review and add this line to your crontab:\n{}", store.cron_command(&task));
+        }
+        ScheduleCommand::Remove { name } => {
+            if store.remove(name)? { println!("Removed local schedule definition {name}."); } else { println!("No local schedule named {name}."); }
+        }
+        ScheduleCommand::Export => {
+            for task in store.list()? { println!("{}", store.cron_command(&task)); }
+        }
+    }
+    Ok(())
+}
+
+async fn rpc(config: &AppConfig, cli: &Cli) -> Result<()> {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    for line in stdin.lock().lines() {
+        let line = line?;
+        if line.trim().is_empty() { continue; }
+        let request: Value = match serde_json::from_str(&line) {
+            Ok(value) => value,
+            Err(error) => {
+                writeln!(stdout, "{}", json!({"ok": false, "error": format!("invalid JSON request: {error}")}))?;
+                stdout.flush()?;
+                continue;
+            }
+        };
+        let id = request.get("id").cloned().unwrap_or(Value::Null);
+        let result = async {
+            let prompt = request.get("prompt").and_then(Value::as_str).ok_or_else(|| anyhow::anyhow!("prompt must be a string"))?;
+            let provider = request.get("provider").and_then(Value::as_str);
+            let model = request.get("model").and_then(Value::as_str);
+            let session = request.get("session").and_then(Value::as_str).map(ToOwned::to_owned);
+            let answer = agent_for(config, cli, provider, model, session).await?.run(prompt).await?;
+            Ok::<Value, anyhow::Error>(json!({"text": answer}))
+        }.await;
+        let response = match result {
+            Ok(value) => json!({"id": id, "ok": true, "result": value}),
+            Err(error) => json!({"id": id, "ok": false, "error": error.to_string()}),
+        };
+        writeln!(stdout, "{response}")?;
+        stdout.flush()?;
     }
     Ok(())
 }

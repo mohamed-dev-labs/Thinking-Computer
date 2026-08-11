@@ -13,3 +13,4 @@ git push
 ```
 
 `ci.yml` runs Rust tests and validates the Node.js plugin host. `release.yml` builds Linux x86_64, macOS x86_64, macOS ARM64, and Windows x86_64 archives when a version tag is pushed.
+

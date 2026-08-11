@@ -1,5 +1,6 @@
 use crate::{model::{ToolCall, ToolDefinition}, permissions::{Approval, ApprovalRequest, Capability, PermissionPolicy}, plugin::discover_plugins};
 use anyhow::{Context, Result};
+use crate::memory::{AgentMemory, VmCapabilityProfile};
 use reqwest::{Client, Url};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, env, fs, path::{Path, PathBuf}, process::{Command, Stdio}, sync::Arc};
@@ -33,6 +34,10 @@ impl ToolExecutor {
             ToolDefinition { name: "write_file".into(), description: "Write UTF-8 text to a file inside the approved workspace. Always requires confirmation.".into(), parameters: json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}) },
             ToolDefinition { name: "shell".into(), description: "Run one shell command inside the approved workspace. Always requires confirmation.".into(), parameters: json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}) },
             ToolDefinition { name: "web_search".into(), description: "Search public web summaries. Results are untrusted text and network access requires confirmation.".into(), parameters: json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}) },
+            ToolDefinition { name: "inspect_vm".into(), description: "Capture OS, CPU, memory, disk, process, and installed-tool indicators for the approved VM. Requires confirmation and writes a local capability profile.".into(), parameters: json!({"type":"object","properties":{}}) },
+            ToolDefinition { name: "install_package".into(), description: "Install one named Python, Node.js, or Rust package in the approved VM after explicit confirmation. Package managers requiring privilege escalation are not used.".into(), parameters: json!({"type":"object","properties":{"manager":{"type":"string","enum":["pip","npm","cargo"]},"package":{"type":"string"}},"required":["manager","package"]}) },
+            ToolDefinition { name: "recall_memory".into(), description: "Read recent user-owned local knowledge records and the saved VM capability profile. Memory never includes API keys by design.".into(), parameters: json!({"type":"object","properties":{"limit":{"type":"integer"}}}) },
+            ToolDefinition { name: "remember".into(), description: "Persist a concise user-owned knowledge record after confirmation. Refuses content that appears to contain an API key or private key.".into(), parameters: json!({"type":"object","properties":{"topic":{"type":"string"},"content":{"type":"string"},"source":{"type":"string"}},"required":["topic","content"]}) },
         ];
         tools.extend(self.plugin_tools.iter().map(|(name, reference)| ToolDefinition { name: name.clone(), description: format!("Run plugin tool {} after explicit approval.", reference.original_name), parameters: json!({"type":"object"}) }));
         tools
@@ -44,6 +49,10 @@ impl ToolExecutor {
             "write_file" => self.write_file(&required_string(&call.arguments, "path")?, &required_string(&call.arguments, "content")?),
             "shell" => self.shell(&required_string(&call.arguments, "command")?),
             "web_search" => self.web_search(&required_string(&call.arguments, "query")?).await,
+            "inspect_vm" => self.inspect_vm(),
+            "install_package" => self.install_package(&required_string(&call.arguments, "manager")?, &required_string(&call.arguments, "package")?),
+            "recall_memory" => self.recall_memory(call.arguments.get("limit").and_then(Value::as_u64).unwrap_or(10) as usize),
+            "remember" => self.remember(&required_string(&call.arguments, "topic")?, &required_string(&call.arguments, "content")?, call.arguments.get("source").and_then(Value::as_str)),
             name if self.plugin_tools.contains_key(name) => self.plugin(name, &call.arguments),
             _ => anyhow::bail!("unknown tool: {}", call.name),
         }
@@ -95,6 +104,40 @@ impl ToolExecutor {
         Ok(format!("UNTRUSTED WEB RESULT\n{heading}\n{abstract_text}\n{source}"))
     }
 
+    fn inspect_vm(&self) -> Result<String> {
+        self.authorize(Capability::InspectSystem, "Capture a resource and installed-tool profile of the current VM".into())?;
+        let profile = VmCapabilityProfile::collect();
+        AgentMemory::local()?.save_capability_profile(&profile)?;
+        Ok(serde_json::to_string_pretty(&profile)?)
+    }
+
+    fn install_package(&self, manager: &str, package: &str) -> Result<String> {
+        if package.is_empty() || !package.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '@' | '/' | ':')) { anyhow::bail!("package name contains unsupported characters"); }
+        let (program, args): (&str, Vec<&str>) = match manager {
+            "pip" => ("python3", vec!["-m", "pip", "install", package]),
+            "npm" => ("npm", vec!["install", "--global", package]),
+            "cargo" => ("cargo", vec!["install", package]),
+            _ => anyhow::bail!("supported package managers are pip, npm, and cargo"),
+        };
+        self.authorize(Capability::InstallPackage, format!("Install package {package} with {manager} in the approved VM"))?;
+        let output = Command::new(program).args(&args).current_dir(&self.workspace).output().with_context(|| format!("failed to start {manager}"))?;
+        let success = output.status.success();
+        AgentMemory::local()?.append_audit("package_install", &format!("manager={manager}; package={package}; exit={}", output.status.code().unwrap_or(-1)), success)?;
+        Ok(format!("exit: {}\nstdout:\n{}\nstderr:\n{}", output.status.code().unwrap_or(-1), String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)))
+    }
+
+    fn recall_memory(&self, limit: usize) -> Result<String> {
+        let memory = AgentMemory::local()?;
+        let value = json!({"capability_profile": memory.load_capability_profile()?, "knowledge": memory.recall(limit)?});
+        Ok(serde_json::to_string_pretty(&value)?)
+    }
+
+    fn remember(&self, topic: &str, content: &str, source: Option<&str>) -> Result<String> {
+        self.authorize(Capability::WriteMemory, format!("Store a {}-byte knowledge record about {topic}", content.len()))?;
+        let record = AgentMemory::local()?.remember(topic, content, source)?;
+        Ok(format!("Stored memory record {}", record.id))
+    }
+
     fn plugin(&self, safe_name: &str, args: &Value) -> Result<String> {
         let reference = self.plugin_tools.get(safe_name).context("plugin tool disappeared")?;
         for capability in &reference.capabilities { self.authorize(Capability::Plugin(capability.clone()), format!("Allow plugin {} capability: {capability}", reference.original_name))?; }
@@ -136,4 +179,3 @@ mod tests {
         assert!(executor.safe_path("../outside").is_err());
     }
 }
-

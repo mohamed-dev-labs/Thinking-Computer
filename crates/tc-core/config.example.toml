@@ -19,3 +19,72 @@ model = "gemini-2.5-flash"
 model = "llama3.2"
 base_url = "http://127.0.0.1:11434"
 
+# The following profiles use the shared OpenAI-compatible tool-calling transport.
+# Prefer the listed environment variables for secrets; define base_url explicitly
+# when a vendor/account/region requires a custom endpoint.
+[providers.openrouter]
+model = "openai/gpt-4.1-mini"
+# OPENROUTER_API_KEY
+
+[providers.groq]
+model = "llama-3.3-70b-versatile"
+# GROQ_API_KEY
+
+[providers.xai]
+model = "grok-4.5"
+# XAI_API_KEY
+
+[providers.mistral]
+model = "mistral-large-latest"
+# MISTRAL_API_KEY
+
+[providers.nvidia_nim]
+model = "meta/llama-3.1-8b-instruct"
+# base_url = "https://your-nim-endpoint/v1/chat/completions"
+# NVIDIA_API_KEY
+
+[providers.cloudflare_workers_ai]
+model = "@cf/meta/llama-3.1-8b-instruct"
+# base_url = "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1/chat/completions"
+# CLOUDFLARE_API_TOKEN
+
+[providers.perplexity]
+model = "sonar"
+# base_url = "https://api.perplexity.ai/chat/completions"
+# PERPLEXITY_API_KEY
+
+[providers.moonshot]
+model = "kimi-k2"
+# base_url = "https://your-moonshot-openai-compatible-endpoint/v1/chat/completions"
+# MOONSHOT_API_KEY
+
+[providers.zai]
+model = "glm-4.7"
+# base_url = "https://your-zai-openai-compatible-endpoint/v1/chat/completions"
+# ZAI_API_KEY
+
+[providers.minimax]
+model = "MiniMax-M2.5"
+# base_url = "https://your-minimax-openai-compatible-endpoint/v1/chat/completions"
+# MINIMAX_API_KEY
+
+[providers.dashscope]
+model = "qwen-plus"
+# base_url = "https://your-dashscope-openai-compatible-endpoint/v1/chat/completions"
+# DASHSCOPE_API_KEY
+
+# Any future compatible provider can be defined without recompiling.
+[providers.private_gateway]
+protocol = "openai_compatible"
+model = "your-model-id"
+base_url = "https://gateway.example/v1/chat/completions"
+# api_key = "set OPENAI_COMPATIBLE_API_KEY instead"
+
+# A bridge treats empty allowlists as denied. Add only sender IDs you control.
+[channels.telegram]
+allowed_senders = ["your-telegram-user-or-chat-id"]
+webhook_secret_env = "TELEGRAM_WEBHOOK_SECRET"
+
+[channels.discord]
+allowed_senders = ["your-discord-user-id"]
+webhook_secret_env = "DISCORD_APPLICATION_PUBLIC_KEY"
