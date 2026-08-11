@@ -1,0 +1,14 @@
+{
+  "name": "hello-plugin",
+  "version": "0.1.0",
+  "entry": "index.mjs",
+  "tools": [
+    {
+      "name": "hello_plugin_greet",
+      "description": "Return a greeting from the sample Node.js plugin.",
+      "parameters": {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},
+      "capabilities": []
+    }
+  ]
+}
+

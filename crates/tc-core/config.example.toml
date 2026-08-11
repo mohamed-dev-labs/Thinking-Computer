@@ -1,0 +1,21 @@
+# Thinking Computer uses local configuration and local session storage only.
+default_provider = "ollama"
+max_steps = 8
+# workspace = "/absolute/path/to/allowed/workspace"
+
+[providers.openai]
+model = "gpt-4.1-mini"
+# api_key = "set OPENAI_API_KEY instead of saving secrets here"
+
+[providers.anthropic]
+model = "claude-3-5-haiku-latest"
+# api_key = "set ANTHROPIC_API_KEY instead of saving secrets here"
+
+[providers.gemini]
+model = "gemini-2.5-flash"
+# api_key = "set GEMINI_API_KEY instead of saving secrets here"
+
+[providers.ollama]
+model = "llama3.2"
+base_url = "http://127.0.0.1:11434"
+

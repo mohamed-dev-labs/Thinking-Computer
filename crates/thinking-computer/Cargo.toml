@@ -1,0 +1,22 @@
+[package]
+name = "thinking-computer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A local-first personal agent for the terminal"
+
+[[bin]]
+name = "thinking-computer"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+dirs.workspace = true
+rustyline.workspace = true
+tokio.workspace = true
+tc-core = { path = "../tc-core" }
+
+[dev-dependencies]
+tempfile = "3.10"
