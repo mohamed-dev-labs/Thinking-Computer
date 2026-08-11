@@ -57,4 +57,3 @@ pub struct ToolDefinition {
     pub description: String,
     pub parameters: Value,
 }
-

@@ -1,6 +1,10 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, env, fs, path::{Path, PathBuf}};
+use std::{
+    collections::BTreeMap,
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ProviderConfig {
@@ -50,41 +54,88 @@ pub enum ProviderKind {
 impl ProviderKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Openai => "openai", Self::Anthropic => "anthropic", Self::Gemini => "gemini", Self::Ollama => "ollama",
-            Self::Openrouter => "openrouter", Self::Groq => "groq", Self::Xai => "xai", Self::Mistral => "mistral",
-            Self::NvidiaNim => "nvidia_nim", Self::CloudflareWorkersAi => "cloudflare_workers_ai", Self::Perplexity => "perplexity",
-            Self::Together => "together", Self::Fireworks => "fireworks", Self::Cerebras => "cerebras", Self::Sambanova => "sambanova",
-            Self::Deepseek => "deepseek", Self::Moonshot => "moonshot", Self::Zai => "zai", Self::Minimax => "minimax",
-            Self::Dashscope => "dashscope", Self::OpenaiCompatible => "openai_compatible",
+            Self::Openai => "openai",
+            Self::Anthropic => "anthropic",
+            Self::Gemini => "gemini",
+            Self::Ollama => "ollama",
+            Self::Openrouter => "openrouter",
+            Self::Groq => "groq",
+            Self::Xai => "xai",
+            Self::Mistral => "mistral",
+            Self::NvidiaNim => "nvidia_nim",
+            Self::CloudflareWorkersAi => "cloudflare_workers_ai",
+            Self::Perplexity => "perplexity",
+            Self::Together => "together",
+            Self::Fireworks => "fireworks",
+            Self::Cerebras => "cerebras",
+            Self::Sambanova => "sambanova",
+            Self::Deepseek => "deepseek",
+            Self::Moonshot => "moonshot",
+            Self::Zai => "zai",
+            Self::Minimax => "minimax",
+            Self::Dashscope => "dashscope",
+            Self::OpenaiCompatible => "openai_compatible",
         }
     }
 
     pub fn default_model(self) -> &'static str {
         match self {
-            Self::Openai => "gpt-4.1-mini", Self::Anthropic => "claude-3-5-haiku-latest", Self::Gemini => "gemini-2.5-flash",
-            Self::Ollama => "llama3.2", Self::Openrouter => "openai/gpt-4.1-mini", Self::Groq => "llama-3.3-70b-versatile",
-            Self::Xai => "grok-4.5", Self::Mistral => "mistral-large-latest", Self::NvidiaNim => "meta/llama-3.1-8b-instruct",
-            Self::CloudflareWorkersAi => "@cf/meta/llama-3.1-8b-instruct", Self::Perplexity => "sonar", Self::Together => "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-            Self::Fireworks => "accounts/fireworks/models/llama-v3p3-70b-instruct", Self::Cerebras => "llama-3.3-70b", Self::Sambanova => "Meta-Llama-3.3-70B-Instruct",
-            Self::Deepseek => "deepseek-chat", Self::Moonshot => "kimi-k2", Self::Zai => "glm-4.7", Self::Minimax => "MiniMax-M2.5",
-            Self::Dashscope => "qwen-plus", Self::OpenaiCompatible => "configured-model-required",
+            Self::Openai => "gpt-4.1-mini",
+            Self::Anthropic => "claude-3-5-haiku-latest",
+            Self::Gemini => "gemini-2.5-flash",
+            Self::Ollama => "llama3.2",
+            Self::Openrouter => "openai/gpt-4.1-mini",
+            Self::Groq => "llama-3.3-70b-versatile",
+            Self::Xai => "grok-4.5",
+            Self::Mistral => "mistral-large-latest",
+            Self::NvidiaNim => "meta/llama-3.1-8b-instruct",
+            Self::CloudflareWorkersAi => "@cf/meta/llama-3.1-8b-instruct",
+            Self::Perplexity => "sonar",
+            Self::Together => "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            Self::Fireworks => "accounts/fireworks/models/llama-v3p3-70b-instruct",
+            Self::Cerebras => "llama-3.3-70b",
+            Self::Sambanova => "Meta-Llama-3.3-70B-Instruct",
+            Self::Deepseek => "deepseek-chat",
+            Self::Moonshot => "kimi-k2",
+            Self::Zai => "glm-4.7",
+            Self::Minimax => "MiniMax-M2.5",
+            Self::Dashscope => "qwen-plus",
+            Self::OpenaiCompatible => "configured-model-required",
         }
     }
 
     pub fn env_key(self) -> Option<&'static str> {
         match self {
-            Self::Openai => Some("OPENAI_API_KEY"), Self::Anthropic => Some("ANTHROPIC_API_KEY"), Self::Gemini => Some("GEMINI_API_KEY"),
-            Self::Ollama => None, Self::Openrouter => Some("OPENROUTER_API_KEY"), Self::Groq => Some("GROQ_API_KEY"), Self::Xai => Some("XAI_API_KEY"),
-            Self::Mistral => Some("MISTRAL_API_KEY"), Self::NvidiaNim => Some("NVIDIA_API_KEY"), Self::CloudflareWorkersAi => Some("CLOUDFLARE_API_TOKEN"),
-            Self::Perplexity => Some("PERPLEXITY_API_KEY"), Self::Together => Some("TOGETHER_API_KEY"), Self::Fireworks => Some("FIREWORKS_API_KEY"),
-            Self::Cerebras => Some("CEREBRAS_API_KEY"), Self::Sambanova => Some("SAMBANOVA_API_KEY"), Self::Deepseek => Some("DEEPSEEK_API_KEY"),
-            Self::Moonshot => Some("MOONSHOT_API_KEY"), Self::Zai => Some("ZAI_API_KEY"), Self::Minimax => Some("MINIMAX_API_KEY"),
-            Self::Dashscope => Some("DASHSCOPE_API_KEY"), Self::OpenaiCompatible => Some("OPENAI_COMPATIBLE_API_KEY"),
+            Self::Openai => Some("OPENAI_API_KEY"),
+            Self::Anthropic => Some("ANTHROPIC_API_KEY"),
+            Self::Gemini => Some("GEMINI_API_KEY"),
+            Self::Ollama => None,
+            Self::Openrouter => Some("OPENROUTER_API_KEY"),
+            Self::Groq => Some("GROQ_API_KEY"),
+            Self::Xai => Some("XAI_API_KEY"),
+            Self::Mistral => Some("MISTRAL_API_KEY"),
+            Self::NvidiaNim => Some("NVIDIA_API_KEY"),
+            Self::CloudflareWorkersAi => Some("CLOUDFLARE_API_TOKEN"),
+            Self::Perplexity => Some("PERPLEXITY_API_KEY"),
+            Self::Together => Some("TOGETHER_API_KEY"),
+            Self::Fireworks => Some("FIREWORKS_API_KEY"),
+            Self::Cerebras => Some("CEREBRAS_API_KEY"),
+            Self::Sambanova => Some("SAMBANOVA_API_KEY"),
+            Self::Deepseek => Some("DEEPSEEK_API_KEY"),
+            Self::Moonshot => Some("MOONSHOT_API_KEY"),
+            Self::Zai => Some("ZAI_API_KEY"),
+            Self::Minimax => Some("MINIMAX_API_KEY"),
+            Self::Dashscope => Some("DASHSCOPE_API_KEY"),
+            Self::OpenaiCompatible => Some("OPENAI_COMPATIBLE_API_KEY"),
         }
     }
 
     fn env_base_url(self) -> Option<&'static str> {
-        match self { Self::Ollama => Some("OLLAMA_HOST"), Self::OpenaiCompatible => Some("OPENAI_COMPATIBLE_BASE_URL"), _ => None }
+        match self {
+            Self::Ollama => Some("OLLAMA_HOST"),
+            Self::OpenaiCompatible => Some("OPENAI_COMPATIBLE_BASE_URL"),
+            _ => None,
+        }
     }
 
     fn default_endpoint(self) -> Option<&'static str> {
@@ -142,41 +193,93 @@ pub struct AppConfig {
     pub channels: BTreeMap<String, ChannelConfig>,
 }
 
-fn default_provider() -> String { "ollama".to_string() }
-fn default_max_steps() -> usize { 8 }
+fn default_provider() -> String {
+    "ollama".to_string()
+}
+fn default_max_steps() -> usize {
+    8
+}
 
 impl Default for AppConfig {
-    fn default() -> Self { Self { default_provider: default_provider(), workspace: None, max_steps: default_max_steps(), providers: BTreeMap::new(), channels: BTreeMap::new() } }
+    fn default() -> Self {
+        Self {
+            default_provider: default_provider(),
+            workspace: None,
+            max_steps: default_max_steps(),
+            providers: BTreeMap::new(),
+            channels: BTreeMap::new(),
+        }
+    }
 }
 
 impl AppConfig {
     pub fn config_path() -> PathBuf {
-        if let Ok(home) = env::var("TC_HOME") { return PathBuf::from(home).join("config.toml"); }
-        dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("thinking-computer").join("config.toml")
+        if let Ok(home) = env::var("TC_HOME") {
+            return PathBuf::from(home).join("config.toml");
+        }
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("thinking-computer")
+            .join("config.toml")
     }
     pub fn load_or_default(path: Option<&Path>) -> Result<Self> {
         let path = path.map(PathBuf::from).unwrap_or_else(Self::config_path);
-        if !path.exists() { return Ok(Self::default()); }
-        let contents = fs::read_to_string(&path).with_context(|| format!("failed to read configuration at {}", path.display()))?;
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+        let contents = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read configuration at {}", path.display()))?;
         toml::from_str(&contents).with_context(|| format!("invalid TOML in {}", path.display()))
     }
     pub fn write_example(path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
-        fs::write(path, include_str!("../config.example.toml")).with_context(|| format!("failed to write {}", path.display()))
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, include_str!("../config.example.toml"))
+            .with_context(|| format!("failed to write {}", path.display()))
     }
-    pub fn resolve_provider(&self, requested: Option<&str>, model: Option<&str>) -> Result<ResolvedProvider> {
-        let name = requested.unwrap_or(&self.default_provider).trim().to_ascii_lowercase().replace('-', "_");
+    pub fn resolve_provider(
+        &self,
+        requested: Option<&str>,
+        model: Option<&str>,
+    ) -> Result<ResolvedProvider> {
+        let name = requested
+            .unwrap_or(&self.default_provider)
+            .trim()
+            .to_ascii_lowercase()
+            .replace('-', "_");
         let configured = self.providers.get(&name).cloned().unwrap_or_default();
         let kind: ProviderKind = match configured.protocol.as_deref() {
             Some(protocol) => protocol.parse()?,
             None => name.parse()?,
         };
-        let api_key = kind.env_key().and_then(|key| env::var(key).ok()).or(configured.api_key);
-        let base_url = kind.env_base_url().and_then(|key| env::var(key).ok()).or(configured.base_url).or_else(|| kind.default_endpoint().map(ToOwned::to_owned));
-        let chosen_model = model.map(ToOwned::to_owned).or(configured.model).unwrap_or_else(|| kind.default_model().to_string());
-        if chosen_model == "configured-model-required" { anyhow::bail!("provider profile {name} needs a model in configuration or --model"); }
-        if kind.uses_openai_compatible_transport() && base_url.is_none() { anyhow::bail!("provider profile {name} needs base_url set to a full OpenAI-compatible chat-completions endpoint"); }
-        Ok(ResolvedProvider { name, kind, api_key, model: chosen_model, base_url, headers: configured.headers })
+        let api_key = kind
+            .env_key()
+            .and_then(|key| env::var(key).ok())
+            .or(configured.api_key);
+        let base_url = kind
+            .env_base_url()
+            .and_then(|key| env::var(key).ok())
+            .or(configured.base_url)
+            .or_else(|| kind.default_endpoint().map(ToOwned::to_owned));
+        let chosen_model = model
+            .map(ToOwned::to_owned)
+            .or(configured.model)
+            .unwrap_or_else(|| kind.default_model().to_string());
+        if chosen_model == "configured-model-required" {
+            anyhow::bail!("provider profile {name} needs a model in configuration or --model");
+        }
+        if kind.uses_openai_compatible_transport() && base_url.is_none() {
+            anyhow::bail!("provider profile {name} needs base_url set to a full OpenAI-compatible chat-completions endpoint");
+        }
+        Ok(ResolvedProvider {
+            name,
+            kind,
+            api_key,
+            model: chosen_model,
+            base_url,
+            headers: configured.headers,
+        })
     }
 }
 
@@ -193,8 +296,18 @@ mod tests {
     #[test]
     fn resolves_a_named_compatible_profile() {
         let mut config = AppConfig::default();
-        config.providers.insert("private_gateway".into(), ProviderConfig { protocol: Some("openai_compatible".into()), base_url: Some("https://example.test/v1/chat/completions".into()), model: Some("my-model".into()), ..ProviderConfig::default() });
-        let provider = config.resolve_provider(Some("private_gateway"), None).unwrap();
+        config.providers.insert(
+            "private_gateway".into(),
+            ProviderConfig {
+                protocol: Some("openai_compatible".into()),
+                base_url: Some("https://example.test/v1/chat/completions".into()),
+                model: Some("my-model".into()),
+                ..ProviderConfig::default()
+            },
+        );
+        let provider = config
+            .resolve_provider(Some("private_gateway"), None)
+            .unwrap();
         assert_eq!(provider.kind, ProviderKind::OpenaiCompatible);
         assert_eq!(provider.model, "my-model");
     }

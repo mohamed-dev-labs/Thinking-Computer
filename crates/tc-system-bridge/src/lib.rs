@@ -5,6 +5,7 @@ mod ffi {
 
         fn platform_name() -> String;
         fn cpu_architecture() -> String;
+        fn logical_cpu_count() -> u32;
     }
 }
 
@@ -18,3 +19,7 @@ pub fn cpu_architecture() -> String {
     ffi::cpu_architecture()
 }
 
+/// Returns the native runtime's reported logical processor count.
+pub fn logical_cpu_count() -> u32 {
+    ffi::logical_cpu_count()
+}

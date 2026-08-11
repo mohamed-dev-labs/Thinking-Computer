@@ -1,5 +1,7 @@
 #include "system_bridge.h"
 
+#include <thread>
+
 rust::String platform_name() {
 #if defined(_WIN32)
   return "windows";
@@ -20,4 +22,9 @@ rust::String cpu_architecture() {
 #else
   return "unknown";
 #endif
+}
+
+std::uint32_t logical_cpu_count() {
+  const auto count = std::thread::hardware_concurrency();
+  return count == 0 ? 1 : count;
 }

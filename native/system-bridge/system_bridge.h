@@ -4,3 +4,4 @@
 
 rust::String platform_name();
 rust::String cpu_architecture();
+std::uint32_t logical_cpu_count();

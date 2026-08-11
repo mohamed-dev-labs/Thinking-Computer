@@ -9,4 +9,3 @@ fn main() {
     println!("cargo:rerun-if-changed=../../native/system-bridge/system_bridge.h");
     println!("cargo:rerun-if-changed=../../native/system-bridge/system_bridge.cc");
 }
-

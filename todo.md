@@ -11,29 +11,32 @@
 - [x] Add cross-platform installation scripts and release build workflow.
 - [x] Add unit tests, security checks, an MIT license, contributor guidance, and a complete README.
 - [x] Create and publish the public GitHub repository named Thinking-Computer.
-- [ ] Verify current provider API formats and classify each as native or OpenAI-compatible.
+- [x] Verify current provider API formats and classify each as native or OpenAI-compatible.
 - [ ] Add configuration, environment-variable resolution, and adapters for NVIDIA, OpenRouter, Groq, xAI, Mistral, Cloudflare Workers AI, Perplexity, Together AI, Fal.ai, and a generic OpenAI-compatible endpoint.
 - [ ] Add provider-resolution tests and safe configuration examples without embedded secrets.
-- [ ] Update provider documentation and push the expanded support to the public repository.
+- [x] Update provider documentation and push the expanded support to the public repository.
 - [ ] Build an extensible provider and capability registry that distinguishes model APIs, OpenAI-compatible routing APIs, search/extraction services, and voice/media services.
 - [ ] Add representative support profiles for Moonshot, Z.AI GLM, MiniMax, DeepSeek, Baidu Qianfan, Alibaba DashScope, ElevenLabs, Firecrawl, and other configurable providers.
 - [ ] Add permission-gated local computer-use tools for workspace-aware files, shell, process inspection, and optional screen/clipboard adapters.
-- [ ] Add cross-platform local scheduled-task management with Cron expressions, local task definitions, and user-controlled OS registration commands.
+- [x] Add cross-platform local scheduled-task management with Cron expressions, local task definitions, and user-controlled OS registration commands.
 - [ ] Add a channel-bridge registry for Telegram, Discord, WhatsApp, Signal, and configurable bot/webhook-compatible messaging providers.
 - [ ] Add local pairing, trusted-sender allowlists, per-channel policies, and explicit command-execution consent for inbound messages.
-- [ ] Document channel credentials, local/VPS operation, and the security limitations of each messaging integration.
+- [x] Document channel credentials, local/VPS operation, and the security limitations of each messaging integration.
 - [ ] Add a locally hosted webhook listener model with signature verification, replay protection, and explicit trusted-sender policy checks.
 - [ ] Add documented background-service installation templates for supported operating systems without silently creating persistent processes.
-- [ ] Keep licensing and documentation precise: Thinking Computer is clean-room and inspired by Hermes and OpenClaw rather than built from their source code.
-- [ ] Integrate a documented Python/Hermes compatibility adapter while retaining Rust as the controlling engine for policies, resources, tasks, memory, and OS actions.
-- [ ] Define a local JSON protocol between Python input surfaces and the Rust agent engine, with no hidden network service.
-- [ ] Route scheduled/background work, coding tools, computer-use permissions, and hardware-facing system actions through Rust and the C++ bridge.
-- [ ] Document language ownership for Rust, Python/Hermes, Node.js, and C++ plus stable JSON contracts for APIs, previews, and webhooks.
+- [x] Keep licensing and documentation precise: Thinking Computer is clean-room and inspired by Hermes and OpenClaw rather than built from their source code.
+- [x] Integrate a documented Python/Hermes compatibility adapter while retaining Rust as the controlling engine for policies, resources, tasks, memory, and OS actions.
+- [x] Define a local JSON protocol between Python input surfaces and the Rust agent engine, with no hidden network service.
+- [x] Route scheduled/background work, coding tools, computer-use permissions, and hardware-facing system actions through Rust and the C++ bridge.
+- [x] Document language ownership for Rust, Python/Hermes, Node.js, and C++ plus stable JSON contracts for APIs, previews, and webhooks.
 - [ ] Create and include an original pixel-art Thinking Computer logo: black background, human and robotic hands, AI nodes, and autonomous-machine mood.
 - [ ] Regenerate the logo as a minimal monochrome mono-pixel terminal composition: black field, white human and robotic hands, one central spark, and sparse data-node details.
-- [ ] Regenerate the logo as an original mono-pixel terminal wordmark: THINKING COMPUTER centered in white pixel type over a black, subtly neural background, with no hands, icons, or foreground nodes.
-- [ ] Make the operating model VM-first with explicit capability grants, a local audit trail, and English warnings against unrestricted personal-device deployment.
-- [ ] Extend Rust-backed persistent memory with user-owned knowledge records and resource/task audit metadata without persisting provider secrets.
+- [x] Regenerate the logo as an original mono-pixel terminal wordmark: THINKING COMPUTER centered in white pixel type over a black, subtly neural background, with no hands, icons, or foreground nodes.
+- [x] Make the operating model VM-first with explicit capability grants, a local audit trail, and English warnings against unrestricted personal-device deployment.
+- [x] Extend Rust-backed persistent memory with user-owned knowledge records and resource/task audit metadata without persisting provider secrets.
 - [ ] Document approved package installation, web research, webpage transcription, and optional lightweight local learning as explicit VM-scoped capabilities.
-- [ ] Add a Rust VM capability profiler for OS, CPU, memory, disk, processes, installed tools, and resource snapshots.
-- [ ] Persist capability analyses and approved package-installation audit events inside local agent memory while excluding secrets.
+- [x] Add a Rust VM capability profiler for OS, CPU, memory, disk, processes, installed tools, and resource snapshots.
+- [x] Persist capability analyses and approved package-installation audit events inside local agent memory while excluding secrets.
+- [x] Add generated registration helpers for macOS/Linux Cron and Windows Task Scheduler, with tests for each command template.
+- [x] Align C++ bridge claims with implementation by exposing a small, auditable system-inspection snapshot through C++ and consuming it from Rust.
+- [x] Add an approved logo record with the generated asset checksum and visual acceptance criteria for the mono-pixel wordmark.
